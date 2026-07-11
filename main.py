@@ -1,16 +1,47 @@
-from fastapi import FastAPI
-from database.connection import Base, engine
-from database.models import Lead, Company
-from modules.module1_leads import router as lead_router
-from modules.module2_intelligence import router as intelligence_router
+import streamlit as st
+import login
+import signup
 
-app = FastAPI(title="Salesgenie AI Backend")
+st.set_page_config(
+    page_title="Sales Genie AI",
+    page_icon="🤖",
+    layout="wide"
+)
 
-Base.metadata.create_all(bind=engine)
+#----------------- Login Check -------------------
 
-app.include_router(lead_router)
-app.include_router(intelligence_router)
+if "page" not in st.session_state:
+    st.session_state.page = "login"
 
-@app.get("/")
-def read_root():
-    return {"message": "Salesgenie AI Backend is running successfully!"}
+#----------------- Page Navigation -------------------
+st.markdown("""
+<style>
+.main {
+    background-color: #f8fafc;
+}
+
+.stButton>button{
+    width:100%;
+    border-radius:8px;
+    height:45px;
+    background:#2563eb;
+    color:white;
+    font-weight:bold;
+}
+
+.stTextInput input{
+    border-radius:8px;
+}
+
+section[data-testid="stSidebar"]{
+    background:#f1f5f9;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------- Page Navigation ----------------
+if st.session_state.page == "login":
+    login.login()
+
+elif st.session_state.page == "signup":
+    signup.signup()
