@@ -1,8 +1,12 @@
 import re
 import os
 import textwrap
+from unittest import result
 import streamlit as st
 import requests
+from components.theme import load_theme
+
+load_theme()
 
 API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
@@ -12,7 +16,7 @@ API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 PANEL       = "transparent"
 PANEL_ALT   = "transparent"
 BORDER      = "#000000"
-TEXT        = "#111827"   # dark, for readability against the gradient background
+TEXT        = "#ADB6CB"   # dark, for readability against the gradient background
 TEXT_DIM    = "#4C535D"
 GREEN       = "#348BD3"
 RED         = "#F87171"
@@ -101,77 +105,146 @@ def load_custom_css():
     """, unsafe_allow_html=True)
 
 
-def validate(company: str, industry: str, contact: str, email: str, phone: str):
-    """Returns a list of human-readable validation errors, empty if the form is OK."""
+def validate(company: str, industry: str, name: str, email: str, phone: str):
+
     errors = []
+
     if not company.strip():
         errors.append("Company Name is required.")
-    if not contact.strip():
+
+    if not name.strip():
         errors.append("Contact Name is required.")
+
     if not email.strip():
         errors.append("Email is required.")
+
     elif not EMAIL_RE.match(email.strip()):
-        errors.append("Email doesn't look valid — check the format (name@company.com).")
+        errors.append("Email doesn't look valid — check the format.")
+
     return errors
 
 
 def show():
     load_custom_css()
 
-    st.markdown(textwrap.dedent(f"""
-    <div class="console-eyebrow">LEAD CAPTURE &middot; NEW ENTRY</div>
-    <div class="console-title">Add New Lead</div>
-    <div class="console-sub">Log a new prospect straight into the pipeline.</div>
-    """).strip(), unsafe_allow_html=True)
+    st.markdown("""
+<div class="page-header">
+    <div class="page-tag">LEAD MANAGEMENT</div>
+    <div class="page-title">Add New Lead</div>
+    <div class="page-subtitle">
+        Create and store a new lead in the SalesGenie CRM.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+    st.caption(
+        "SalesGenie AI • Lead Management & Intelligence Engine • 2026"
+    )
+    st.info(
+        "➕ Fill in the lead details below. Once submitted, the lead will be saved to the database and appear on the dashboard."
+    )
 
-    with st.form("lead_form", clear_on_submit=False):
+    with st.form("lead_form", clear_on_submit=True):
+
         company = st.text_input("Company Name", placeholder="e.g. Acme Corp")
 
         c1, c2 = st.columns(2)
+
         with c1:
             industry = st.selectbox(
                 "Industry",
-                ["", "Technology", "Software", "SaaS", "E-Commerce", "IT Services",
-                 "Finance", "Healthcare", "Manufacturing", "Other"],
+                [
+                    "",
+                    "Technology",
+                    "Software",
+                    "SaaS",
+                    "E-Commerce",
+                    "IT Services",
+                    "Finance",
+                    "Healthcare",
+                    "Manufacturing",
+                    "Other",
+                ],
             )
+
         with c2:
-            contact = st.text_input("Contact Name", placeholder="e.g. Jane Doe")
-
+            name = st.text_input(
+                "Contact Name",
+                placeholder="e.g. Jane Doe"
+            )
         c3, c4 = st.columns(2)
+
         with c3:
-            email = st.text_input("Email", placeholder="name@company.com")
+            email = st.text_input(
+                "Email",
+                placeholder="name@company.com"
+            )
+
         with c4:
-            phone = st.text_input("Phone", placeholder="+1 (555) 123-4567")
+            phone = st.text_input(
+                "Phone",
+                placeholder="+1 (555) 123-4567"
+            )
 
-        st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
-        submitted = st.form_submit_button("Add Lead", use_container_width=False)
+        submitted = st.form_submit_button("➕ Add Lead")
 
-        if submitted:
-            errors = validate(company, industry, contact, email, phone)
-            if errors:
-                for e in errors:
-                    st.warning(e)
-            else:
-                data = {
-                    "company": company.strip(),
-                    "industry": industry,
-                    "contact": contact.strip(),
-                    "email": email.strip(),
-                    "phone": phone.strip(),
-                }
-                try:
-                    with st.spinner("Adding lead…"):
-                        response = requests.post(f"{API_URL}/add-lead", json=data, timeout=8)
-                    if response.status_code == 200:
-                        st.success(f"**{company}** was added to the pipeline ✅")
-                    else:
-                        st.error(f"Server returned an error ({response.status_code}): {response.text}")
-                except requests.exceptions.ConnectionError:
-                    st.error(f"Can't reach the API server at `{API_URL}`. Is it running?")
-                except requests.exceptions.Timeout:
-                    st.error("The request timed out — the server took too long to respond.")
-                except Exception as e:
-                    st.error(f"Something went wrong: {e}")
+    if submitted:
+
+        errors = validate(company, industry, name, email, phone)
+
+        if errors:
+            for e in errors:
+                st.warning(e)
+
+        else:
+
+            data = {
+                "name": name.strip(),
+                "email": email.strip(),
+                "phone": phone.strip(),
+                "company": company.strip(),
+                "industry": industry,
+            }
+
+            try:
+                with st.spinner("💾 Saving lead to database..."):
+                    response = requests.post(
+                        f"{API_URL}/add-lead",
+                        json=data,
+                        timeout=8,
+                    )
+
+                if response.status_code in [200, 201]:
+                    result = response.json()
+
+                    st.success("✅ Lead Added Successfully!")
+                    st.info(f"""
+                            Company : {company}
+                            Contact : {name}
+                            Industry : {industry}
+                            Lead ID : {result.get('lead_id')}
+""")
+                    st.divider()
+
+                else:
+                    st.error(
+                        f"Error {response.status_code}\n\n{response.text}"
+                    )
+
+            except requests.exceptions.ConnectionError:
+
+                st.error(
+                    f"Cannot connect to FastAPI backend.\n\n"
+                    f"Make sure the backend is running at:\n{API_URL}"
+                )
+
+            except requests.exceptions.Timeout:
+
+                st.error("Request Timed Out.")
+
+            except Exception as e:
+
+                st.error(f"Unexpected Error:\n{e}")
+   
 
 
 if __name__ == "__main__":

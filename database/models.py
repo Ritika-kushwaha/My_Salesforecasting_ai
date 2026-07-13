@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 
-from database.connection import Base
+from database.database import Base
 
 
 class Lead(Base):

@@ -1,11 +1,10 @@
 import login
 import streamlit as st
-
 from modules import module1_leads
 from modules import module2_company
-from modules import module3_enrichment
-from modules import module4_email
-from modules import module5_scoring
+from modules import module3_outreach
+from modules import module4_scoring
+from modules import module5_conversation
 from modules import module6_dashboard
 
 st.set_page_config(
@@ -15,14 +14,30 @@ st.set_page_config(
 )
 
 # --------- Login Check -----------
-
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+    st.session_state["logged_in"] = False
+
+if "user" not in st.session_state:
+    st.session_state["user"] = None
+if "logged_in" not in st.session_state:
+    if st.sidebar.button("Logout", use_container_width=True):
+         st.session_state.clear()
+         st.rerun()
 
 if not st.session_state.logged_in:
     login.login()
     st.stop()
-
+option = st.sidebar.radio(
+    "Choose Module",
+    [
+        "Dashboard",
+        "Add Lead",
+        "Analyze Company",
+        "Lead Enrichment",
+        "Generate Email",
+        "Lead Score",
+    ],
+)
 # ---------- Global CSS ----------
 st.markdown("""
 <style>
@@ -75,31 +90,27 @@ option = st.sidebar.selectbox(
 # ----------- Logout ------------
 
 # Push logout down 
-st.sidebar.markdown("<br>" * 11, 
-unsafe_allow_html=True) 
+st.sidebar.markdown("---")
+st.sidebar.write("")
+st.sidebar.write("")
 
 st.sidebar.divider() 
 
-if st.sidebar.button("Logout", 
-use_container_width=True): 
-        st.session_state.logged_in = False 
-        st.rerun()
+if st.sidebar.button("Logout"):
+    st.session_state["logged_in"] = False
+    st.session_state["user"] = None
+    st.rerun()
 
 # ---------- Navigation ----------
-if option == "Add Lead":
-    module1_leads.show()
+if "user" in st.session_state:
+    st.sidebar.success(f"Welcome, {st.session_state.user}")
+pages = {
+    "Add Lead": module1_leads.show,
+    "Analyze Company": module2_company.show,
+    #"Lead Enrichment": module3_outreach.show,
+    #"Generate Email": module4_scoring.show,
+    #"Lead Score": module5_conversation.show,
+    "Dashboard": module6_dashboard.show,
+}
 
-elif option == "Analyze Company":
-    module2_company.show()
-
-elif option == "Lead Enrichment":
-    module3_enrichment.show()
-
-elif option == "Generate Email":
-    module4_email.show()
-
-elif option == "Lead Score":
-    module5_scoring.show()
-
-elif option == "Dashboard":
-    module6_dashboard.show()
+pages[option]()

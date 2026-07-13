@@ -6,7 +6,15 @@ from datetime import datetime
 from typing import Any
 import textwrap
 import numpy as np
+import os
+import requests
+from components.theme import load_theme
 
+load_theme()
+API_URL = os.getenv(
+    "SALESGENIE_API_URL",
+    "http://127.0.0.1:8000"
+)
 # =========================================================
 # DESIGN TOKENS  ·  "Pipeline Console" theme
 # =========================================================
@@ -336,22 +344,67 @@ def load_custom_css():
 # =========================================================
 # DATA
 # =========================================================
-@st.cache_data
+@st.cache_data(ttl=5)
 def get_leads_data():
-    return pd.DataFrame({
-        "Company": ["Microsoft", "Google", "Amazon", "Adobe", "Infosys",
-                    "IBM", "Oracle", "Salesforce", "SAP", "Meta"],
-        "Industry": ["Technology", "Technology", "E-Commerce", "Software", "IT Services",
-                     "Technology", "Software", "SaaS", "Software", "Technology"],
-        "Lead Score": [95, 91, 88, 84, 79, 76, 73, 89, 68, 92],
-        "Status": ["Qualified", "Qualified", "Follow-up", "Email Sent", "Pending",
-                   "Follow-up", "Pending", "Qualified", "Pending", "Email Sent"],
-        "Last Contact": pd.date_range(end=datetime.today(), periods=10).strftime("%b %d"),
-        "Deal Value ($)": [120000, 95000, 60000, 40000, 25000,
-                            30000, 22000, 88000, 18000, 105000],
-    })
+    try:
+        response = requests.get(f"{API_URL}/leads", timeout=5)
 
+        if response.status_code != 200:
+            return pd.DataFrame()
 
+        leads = response.json()
+
+        if len(leads) == 0:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(leads)
+
+        # -----------------------
+        # Rename backend fields
+        # -----------------------
+
+        if "company" in df.columns:
+            df["Company"] = df["company"]
+
+        if "industry" in df.columns:
+            df["Industry"] = df["industry"]
+
+        if "lead_score" in df.columns:
+            df["Lead Score"] = df["lead_score"]
+        else:
+            df["Lead Score"] = 70
+
+        if "status" in df.columns:
+            df["Status"] = df["status"]
+        else:
+            df["Status"] = "Pending"
+
+        if "last_contact" in df.columns:
+            df["Last Contact Date"] = pd.to_datetime(df["last_contact"])
+            df["Last Contact"] = df["Last Contact Date"].dt.strftime("%b %d")
+        else:
+            df["Last Contact"] = datetime.today().strftime("%b %d")
+
+        if "deal_value" in df.columns:
+            df["Deal Value ($)"] = df["deal_value"]
+        else:
+            df["Deal Value ($)"] = 0
+
+        return df[
+            [
+                "Company",
+                "Industry",
+                "Lead Score",
+                "Status",
+                "Last Contact",
+                "Deal Value ($)"
+            ]
+        ]
+
+    except Exception as e:
+        st.error(f"Backend Error: {e}")
+        return pd.DataFrame()
+    
 @st.cache_data
 def get_trend_data():
     days = pd.date_range(end=datetime.today(), periods=30)
@@ -464,6 +517,9 @@ def show():
     """, unsafe_allow_html=True)
 
     df = get_leads_data()
+    if df.empty:
+        st.warning("No leads found.")
+        return
     trend_df = get_trend_data()
 
     # ---------------- Sidebar Filters ----------------
@@ -487,7 +543,7 @@ def show():
                 st.rerun()
         with col_refresh:
             if st.button("↻ Refresh", use_container_width=True):
-                st.cache_data.clear()
+                get_leads_data.clear()
                 st.toast("Data refreshed", icon="✅")
                 st.rerun()
 
