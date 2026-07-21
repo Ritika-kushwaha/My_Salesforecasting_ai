@@ -108,6 +108,9 @@ def load_custom_css():
 def validate(company: str, industry: str, name: str, email: str, phone: str):
 
     errors = []
+    if not st.session_state.get("logged_in"):
+        st.warning("Please login first.")
+        st.stop()
 
     if not company.strip():
         errors.append("Company Name is required.")

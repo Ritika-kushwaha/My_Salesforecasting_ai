@@ -32,7 +32,9 @@ if "page" not in st.session_state:
 if st.session_state.logged_in:
 
     with st.sidebar:
+        st.success(f"Welcome, {st.session_state.user['name']} 👋")
         page = st.radio(
+            
             "Navigation",
             [
                 "Lead Management",
@@ -43,6 +45,12 @@ if st.session_state.logged_in:
                 "Dashboard"
             ]
         )
+        st.divider()
+        if st.button("Logout"):
+            st.session_state.logged_in = False
+            st.session_state.page = "login"
+            st.session_state.pop("user", None)
+            st.rerun()
 
     if page == "Lead Management":
         leads.show()

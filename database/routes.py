@@ -3,14 +3,16 @@ from unittest import result
 
 from sqlalchemy import text
 from database.ai import model
-import json
-from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database.database import get_db
 from database.models import Lead
 from sqlalchemy import func
 import json
+from fastapi import APIRouter, Depends, HTTPException
+from database.models import User
+from database.schemas import UserCreate
+from database.schemas import UserLogin
 
 router = APIRouter()
 
@@ -61,20 +63,45 @@ def dashboard(db: Session = Depends(get_db)):
     }
 
 @router.post("/login")
-def login(data: dict):
+def login(user: UserLogin, db: Session = Depends(get_db)):
+
+    db_user = db.query(User).filter(User.email == user.email).first()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if db_user.password != user.password:
+        raise HTTPException(status_code=401, detail="Invalid password")
+
     return {
-        "success": True,
-        "message": "Login successful",
-        "user": data.get("email")
+        "message": "Login Successful",
+        "user": {
+            "id": db_user.id,
+            "name": db_user.name,
+            "email": db_user.email
+        }
     }
 
 
 @router.post("/signup")
-def signup(data: dict):
-    return {
-        "success": True,
-        "message": "Account created"
-    }
+def signup(user: UserCreate, db: Session = Depends(get_db)):
+
+    existing = db.query(User).filter(User.email == user.email).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    new_user = User(
+        name=user.name,
+        email=user.email,
+        password=user.password      # We'll hash later
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {"message": "Signup successful"}
 
 
 @router.post("/add-lead")

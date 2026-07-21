@@ -7,9 +7,11 @@ from database.routes import router
 from database.models import Lead, Company
 
 
+
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
-
+print(Base.metadata.tables.keys())
 app = FastAPI(title="SalesGenie API")
 
 # Allow Streamlit to access the API

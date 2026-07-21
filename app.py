@@ -15,7 +15,7 @@ st.set_page_config(
 
 # --------- Login Check -----------
 if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
+    st.session_state.logged_in = False
 
 if "user" not in st.session_state:
     st.session_state["user"] = None
