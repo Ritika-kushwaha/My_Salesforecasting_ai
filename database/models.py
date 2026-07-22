@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 
-from database.connection import Base
+from database.database import Base
 
 
 class Lead(Base):
@@ -16,6 +16,14 @@ class Lead(Base):
     status = Column(String(30), default="New")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True)
+    password = Column(String, nullable=False)
 
 class Company(Base):
     __tablename__ = "companies"

@@ -16,7 +16,7 @@ API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 PANEL       = "transparent"
 PANEL_ALT   = "transparent"
 BORDER      = "#000000"
-TEXT        = "#FBF5F5"   # dark, for readability against the gradient background
+TEXT        = "#ADB6CB"   # dark, for readability against the gradient background
 TEXT_DIM    = "#4C535D"
 GREEN       = "#348BD3"
 RED         = "#F87171"
@@ -108,6 +108,9 @@ def load_custom_css():
 def validate(company: str, industry: str, name: str, email: str, phone: str):
 
     errors = []
+    if not st.session_state.get("logged_in"):
+        st.warning("Please login first.")
+        st.stop()
 
     if not company.strip():
         errors.append("Company Name is required.")
@@ -128,73 +131,20 @@ def show():
     load_custom_css()
 
     st.markdown("""
-    <style>             
-    .page-header{
-        margin-top:-40px;
-        margin-bottom:25px;
-    }
-
-    .page-tag{
-        display:inline-block;
-        background:rgba(37,99,235,.12);
-        color:#2563EB;
-        padding:6px 14px;
-        border-radius:30px;
-        font-size:13px;
-        font-weight:700;
-        letter-spacing:1px;
-        text-transform:uppercase;
-        margin-bottom:14px;
-    }
-
-    .page-title{
-        font-size:42px;
-        font-weight:800;
-        color:#111827;
-        margin-bottom:8px;
-    }
-
-    .page-subtitle{
-        font-size:17px;
-        color:#4B5563;
-        line-height:1.6;
-        max-width:760px;
-    }
-
-    .info-box{
-        margin-top:22px;
-        margin-bottom:20px;
-        padding:18px 22px;
-        background:rgba(255,255,255,.45);
-        border-left:5px solid #2563EB;
-        border-radius:12px;
-        font-size:15px;
-        color:#374151;
-    }
-    </style>
-
-    <div class="page-header">
-
-    <div class="page-tag">
-    Lead Management
-    </div>
-
-    <div class="page-title">
-    Add New Lead
-    </div>
-
+<div class="page-header">
+    <div class="page-tag">LEAD MANAGEMENT</div>
+    <div class="page-title">Add New Lead</div>
     <div class="page-subtitle">
-    Capture new prospects and instantly add them to the SalesGenie CRM pipeline for tracking, analysis, and AI-powered insights.
+        Create and store a new lead in the SalesGenie CRM.
     </div>
-
-    </div>
-
-    <div class="info-box">
-    <b>Quick Tip</b><br>
-    Complete all required fields and click <b>Add Lead</b>. Once saved, the lead will automatically become available across the Dashboard, Lead Scoring, CRM, and AI modules.
-    </div>
-
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
+    st.caption(
+        "SalesGenie AI • Lead Management & Intelligence Engine • 2026"
+    )
+    st.info(
+        "➕ Fill in the lead details below. Once submitted, the lead will be saved to the database and appear on the dashboard."
+    )
 
     with st.form("lead_form", clear_on_submit=True):
 
@@ -238,7 +188,7 @@ def show():
                 placeholder="+1 (555) 123-4567"
             )
 
-        submitted = st.form_submit_button("Add Lead")
+        submitted = st.form_submit_button("➕ Add Lead")
 
     if submitted:
 

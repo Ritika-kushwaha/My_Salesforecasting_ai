@@ -6,92 +6,10 @@ from components.theme import load_theme
 
 load_theme()
 
-API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
+load_theme()
 
-def show():
 
-    st.markdown("""
-    <style>
 
-    .page-tag{
-        display:inline-block;
-        padding:10px 18px;
-        background:rgba(59,130,246,.12);
-        border-radius:999px;
-        color:#3B82F6 !important;
-        font-size:14px;
-        font-weight:700;
-        letter-spacing:2px;
-        text-transform:uppercase;
-        margin-bottom:18px;
-    }
-
-    .page-title{
-        color:#111827 !important;
-        font-size:58px;
-        font-weight:800;
-        margin-bottom:12px;
-    }
-
-    .page-subtitle{
-        color:#4B5563 !important;
-        font-size:20px;
-        line-height:1.8;
-        max-width:900px;
-        margin-bottom:30px;
-    }
-    /* ---------- Form Container ---------- */
-    /* Target Streamlit's actual form wrapper instead of a custom div */
-    div[data-testid="stForm"]{
-        border:2px solid black !important;
-        border-radius:15px !important;
-        padding:25px !important;
-        margin-top:10px !important;
-        background:transparent !important;
-    }
-
-    /* Labels */
-    .stTextInput label,
-    .stSelectbox label{
-        font-family:'JetBrains Mono', monospace !important;
-        font-size:11px !important;
-        font-weight:700 !important;
-        letter-spacing:2px !important;
-        text-transform:uppercase !important;
-        color:#4C535D !important;
-    }
-
-    /* Input Boxes */
-    .stTextInput input,
-    .stSelectbox div[data-baseweb="select"] > div{
-        border:1.5px solid #000 !important;
-        border-radius:10px !important;
-        background:transparent !important;
-        color:#111827 !important;
-    }
-
-    /* Placeholder */
-    .stTextInput input::placeholder{
-        color:#6B7280 !important;
-    }
-
-    /* Button */
-    .stFormSubmitButton>button{
-        width:220px !important;
-        height:52px !important;
-        background:#111827 !important;
-        color:white !important;
-        border-radius:10px !important;
-        border:none !important;
-    }
-
-    .stFormSubmitButton>button:hover{
-        background:transparent !important; color:#111827 !important;
-        border:1px solid #111827 !important;
-    }
-
-    </style>
-    """, unsafe_allow_html=True)
 
     st.html("""
     <div style="margin-top:10px; margin-bottom:35px;">
@@ -168,34 +86,29 @@ def show():
     </div>
     """, unsafe_allow_html=True)
 
+def show():
+
     st.markdown("""
-    <style>           
+<div class="page-header">
+    <div class="page-tag">AI LEAD SCORING</div>
+    <div class="page-title">Lead Score Prediction</div>
+    <div class="page-subtitle">
+        Evaluate lead quality using AI-powered scoring.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+    
 
-    /* TextInput labels */
-    .stTextInput label p{
-        color:#111827 !important;
-        font-weight:600 !important;
-    }
-
-    /* Selectbox labels */
-    .stSelectbox label p{
-        color:#111827 !important;
-        font-weight:600 !important;
-    }
-
-    /* TextArea labels */
-    .stTextArea label p{
-        color:#111827 !important;
-        font-weight:600 !important;
-    }
+    st.info(
+    "🎯 Enter lead details to predict conversion probability and sales priority."
+)
 
     </style>
     """, unsafe_allow_html=True)
 
     
     # ---------- Form ----------
-    
-    with st.form( key="analyze_form"):
+    with st.container( key="analyze_form"):
 
         company = st.text_input("Company Name", placeholder="e.g. Microsoft")
         website = st.text_input("Website", placeholder="https://www.microsoft.com")
@@ -206,10 +119,10 @@ def show():
         )
 
         
-        submitted = st.form_submit_button("Analyze Company")
 
 
-        if submitted:
+        
+        if st.button("🚀 Analyze Company", use_container_width=True):
 
             if company.strip() == "":
                 st.warning("Please enter a company name.")
@@ -235,27 +148,27 @@ def show():
                         col1, col2 = st.columns(2)
 
                         with col1:
-                            st.metric("Company", result.get("company", company))
-                            st.metric("Industry", result.get("industry", "N/A"))
+                            st.metric("🏢 Company", result.get("company", company))
+                            st.metric("🏭 Industry", result.get("industry", "N/A"))
 
                         with col2:
-                            st.metric("Lead Score", f"{result.get('lead_score', 0)}%")
+                            st.metric("🎯 Lead Score", f"{result.get('lead_score', 0)}%")
                             st.progress(result.get("lead_score", 0) / 100)
-                            st.metric("Grade", result.get("grade", "N/A"))
+                            st.metric("⭐ Grade", result.get("grade", "N/A"))
 
                         st.divider()
 
                         # ---------- Summary ----------
-                        st.markdown("### Company Summary")
+                        st.markdown("### 📝 Company Summary")
                         st.write(result.get("company_summary", "Not Available"))
 
-                        st.markdown("### Sales Opportunity")
+                        st.markdown("### 💼 Sales Opportunity")
                         st.success(result.get(
                             "sales_opportunity",
                             "No sales opportunity available."
                         ))
 
-                        st.markdown("### Recommended Sales Approach")
+                        st.markdown("### 🚀 Recommended Sales Approach")
                         st.info(result.get(
                             "recommended_sales_approach",
                             "No recommendation available."
@@ -269,9 +182,9 @@ def show():
                     st.divider()
 
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Lead Score","91%")
-                    col2.metric("Grade","A")
-                    col3.metric("Priority","High")
+                    c1.metric("Lead Score","91%")
+                    c2.metric("Grade","A")
+                    c3.metric("Priority","High")
 
                     st.subheader("Company Overview")
                     st.info(

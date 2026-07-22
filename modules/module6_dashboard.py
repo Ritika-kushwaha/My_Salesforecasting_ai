@@ -742,6 +742,14 @@ def show():
                 </div>
             </div>
             """).strip(), unsafe_allow_html=True)
+        st.sidebar.success(
+            f"👋 Welcome {st.session_state.user['name']}"
+)
+        if st.sidebar.button("Logout"):
+            st.session_state.logged_in = False
+            st.session_state.user = None
+            st.rerun()
+
 
 
 if __name__ == "__main__":

@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: salesgenie_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: salesgenie
+      POSTGRES_PASSWORD: salesgenie_dev_password   # override via .env in real environments
+      POSTGRES_DB: salesgenie
+    ports:
+      - "5432:5432"
+    volumes:
+      - salesgenie_pgdata:/var/lib/postgresql/data
+      - ./database/sql/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/sql/02_seed_data.sql:/docker-entrypoint-initdb.d/02_seed_data.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U salesgenie -d salesgenie"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: salesgenie_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@salesgenie.ai
+      PGADMIN_DEFAULT_PASSWORD: admin_dev_password
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+volumes:
+  salesgenie_pgdata:
