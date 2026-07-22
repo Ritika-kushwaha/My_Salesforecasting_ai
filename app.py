@@ -1,11 +1,10 @@
 import login
 import streamlit as st
-
 from modules import module1_leads
 from modules import module2_company
-from modules import module3_enrichment
-from modules import module4_email
-from modules import module5_scoring
+from modules import module3_outreach
+from modules import module4_scoring
+from modules import module5_conversation
 from modules import module6_dashboard
 
 st.set_page_config(
@@ -15,14 +14,30 @@ st.set_page_config(
 )
 
 # --------- Login Check -----------
-
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+    st.session_state["logged_in"] = False
+
+if "user" not in st.session_state:
+    st.session_state["user"] = None
+if "logged_in" not in st.session_state:
+    if st.sidebar.button("Logout", use_container_width=True):
+         st.session_state.clear()
+         st.rerun()
 
 if not st.session_state.logged_in:
     login.login()
     st.stop()
-
+#option = st.sidebar.radio(
+#    "Choose Module",
+#    [
+#        "Dashboard",
+#        "Add Lead",
+#        "Analyze Company",
+#        "Lead Enrichment",
+#        "Generate Email",
+#        "Lead Score",
+#    ],
+#)
 # ---------- Global CSS ----------
 st.markdown("""
 <style>
@@ -74,32 +89,91 @@ option = st.sidebar.selectbox(
 
 # ----------- Logout ------------
 
-# Push logout down 
-st.sidebar.markdown("<br>" * 11, 
-unsafe_allow_html=True) 
+# Push logout down
+st.sidebar.markdown("<div style='height:290px;'></div>", unsafe_allow_html=True)
 
+# Single divider
 st.sidebar.divider() 
 
-if st.sidebar.button("Logout", 
-use_container_width=True): 
-        st.session_state.logged_in = False 
+col1, col2, col3 = st.sidebar.columns([1, 2, 1])
+
+with col2:
+    if st.button("Logout", use_container_width=True):
+        st.session_state["logged_in"] = False
+        st.session_state["user"] = None
         st.rerun()
 
 # ---------- Navigation ----------
-if option == "Add Lead":
-    module1_leads.show()
+if "user" in st.session_state:
+    user = st.session_state.user
 
-elif option == "Analyze Company":
-    module2_company.show()
+    if isinstance(user, dict):
+        email = user.get("user", "")
+    else:
+        email = str(user)
 
-elif option == "Lead Enrichment":
-    module3_enrichment.show()
+    name = email.split("@")[0].replace(".", " ").title()
 
-elif option == "Generate Email":
-    module4_email.show()
+    st.sidebar.markdown(
+        f"""
+    <div style="
+        background:rgba(255,255,255,0.08);
+        border:1px solid rgba(255,255,255,0.12);
+        border-radius:14px;
+        padding:18px;
+        margin-top:18px;
+    ">
 
-elif option == "Lead Score":
-    module5_scoring.show()
+    <div style="color:#A5B4FC;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:2px;
+    margin-bottom:15px;">
+    LOGGED IN
+    </div>
 
-elif option == "Dashboard":
-    module6_dashboard.show()
+    <div style="display:flex;align-items:center;gap:12px;">
+
+    <div style="
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    background:#4F7CFF;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:24px;">
+    👤
+    </div>
+
+    <div>
+    <div style="
+    color:white;
+    font-size:18px;
+    font-weight:600;">
+    {name}
+    </div>
+
+    <div style="
+    color:#9CA3AF;
+    font-size:13px;">
+    {email}
+    </div>
+    </div>
+
+    </div>
+
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+pages = {
+    "Add Lead": module1_leads.show,
+    "Analyze Company": module2_company.show,
+    #"Lead Enrichment": module3_outreach.show,
+    #"Generate Email": module4_scoring.show,
+    #"Lead Score": module5_conversation.show,
+    "Dashboard": module6_dashboard.show,
+}
+
+pages[option]()

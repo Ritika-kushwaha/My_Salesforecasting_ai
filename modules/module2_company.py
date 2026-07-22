@@ -1,127 +1,201 @@
 import os
-import textwrap
+
 import streamlit as st
 import requests
+from components.theme import load_theme
+
+load_theme()
 
 API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
-# =========================================================
-# DESIGN TOKENS  ·  same transparent / black-border theme as Add Lead
-# =========================================================
-PANEL       = "transparent"
-BORDER      = "#000000"
-TEXT        = "#111827"
-TEXT_DIM    = "#4B5563"
-BLUE        = "#4291B6"
+def show():
 
-
-def load_custom_css():
-    st.markdown(f"""
+    st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-    html, body, [class*="css"] {{ font-family:'Inter', sans-serif; }}
+    .page-tag{
+        display:inline-block;
+        padding:10px 18px;
+        background:rgba(59,130,246,.12);
+        border-radius:999px;
+        color:#3B82F6 !important;
+        font-size:14px;
+        font-weight:700;
+        letter-spacing:2px;
+        text-transform:uppercase;
+        margin-bottom:18px;
+    }
 
-    /* Scoped to .main only — leaves the sidebar and Streamlit's own
-       toolbar (Rerun/Deploy/menu) untouched. */
-    .main, .main p, .main span, .main li, .main label {{
-        color: {TEXT};
-    }}
+    .page-title{
+        color:#111827 !important;
+        font-size:58px;
+        font-weight:800;
+        margin-bottom:12px;
+    }
 
-    .block-container {{ padding-top: 4rem !important; }}
+    .page-subtitle{
+        color:#4B5563 !important;
+        font-size:20px;
+        line-height:1.8;
+        max-width:900px;
+        margin-bottom:30px;
+    }
+    /* ---------- Form Container ---------- */
+    /* Target Streamlit's actual form wrapper instead of a custom div */
+    div[data-testid="stForm"]{
+        border:2px solid black !important;
+        border-radius:15px !important;
+        padding:25px !important;
+        margin-top:10px !important;
+        background:transparent !important;
+    }
 
-    .console-eyebrow {{
-        display:flex; align-items:center; gap:8px;
-        font-family:'JetBrains Mono', monospace;
-        font-size:12px; letter-spacing:2px; font-weight:600;
-        color:{BLUE}; text-transform:uppercase; margin-bottom:10px;
-    }}
-    .console-title {{
-        font-size:clamp(28px, 6vw, 40px); font-weight:700; color:{TEXT};
-        margin:0 0 6px 0; letter-spacing:-0.5px;
-    }}
-    .console-sub {{
-        font-size:14px; color:{TEXT_DIM}; margin:0 0 20px 0;
-    }}
-
-    /* ---------------- Form container ---------------- */
-    div[data-testid="stVerticalBlockBorderWrapper"] {{
-        background:{PANEL} !important;
-        border:1.5px solid {BORDER} !important;
-        border-radius:12px !important;
-    }}
-
-    /* Field labels */
-    label {{
-        color:{TEXT} !important;
-        font-weight:600 !important;
-    }}
-    .stTextInput label, .stSelectbox label {{
+    /* Labels */
+    .stTextInput label,
+    .stSelectbox label{
         font-family:'JetBrains Mono', monospace !important;
-        font-size:11px !important; font-weight:700 !important;
-        letter-spacing:1.5px !important; text-transform:uppercase !important;
-        color:{TEXT_DIM} !important;
-    }}
+        font-size:11px !important;
+        font-weight:700 !important;
+        letter-spacing:2px !important;
+        text-transform:uppercase !important;
+        color:#4C535D !important;
+    }
 
+    /* Input Boxes */
     .stTextInput input,
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{
-        background:{PANEL} !important;
-        border:1.5px solid {BORDER} !important;
-        border-radius:8px !important;
-        color:white !important;
-    }}
-    .stTextInput input:focus {{
-        color:white !important;
-        border-color:{BORDER} !important;
-        box-shadow:0 0 0 2px rgba(0,0,0,0.12) !important;
-    }}
-    .stTextInput input::placeholder {{ color:#6B7280 !important; }}
-    div[data-testid="stSelectbox"] svg {{ fill:#ffffff !important; }}
-
-    /* Info box */
-    div[data-testid="stAlertContainer"] {{
-        background:transparent blue !important;
-        border:1.5px solid light blue !important;
+    .stSelectbox div[data-baseweb="select"] > div{
+        border:1.5px solid #000 !important;
         border-radius:10px !important;
-    }}
-    div[data-testid="stAlertContainer"] p {{ color:{TEXT} !important; }}
+        background:transparent !important;
+        color:#111827 !important;
+    }
 
-    /* Metrics */
-    [data-testid="stMetricValue"] {{ color:{TEXT} !important; }}
-    [data-testid="stMetricLabel"] {{ color:{TEXT_DIM} !important; }}
+    /* Placeholder */
+    .stTextInput input::placeholder{
+        color:#6B7280 !important;
+    }
 
-    /* Buttons — kept solid; a fully transparent button has no
-       visible click target, so this is a deliberate exception
-       to the "everything transparent" rule. */
-    .stButton > button {{
-        background:#111827 !important; color:#FFFFFF !important;
-        border:1.5px solid {BORDER} !important;
-        border-radius:10px; height:45px; padding:0 20px;
-        font-size:16px; font-weight:600;
-    }}
-    .stButton > button:hover {{
-        background:{PANEL} !important; color:{TEXT} !important;
-        border:1.5px solid {BORDER} !important;
-    }}
+    /* Button */
+    .stFormSubmitButton>button{
+        width:220px !important;
+        height:52px !important;
+        background:#111827 !important;
+        color:white !important;
+        border-radius:10px !important;
+        border:none !important;
+    }
+
+    .stFormSubmitButton>button:hover{
+        background:transparent !important; color:#111827 !important;
+        border:1px solid #111827 !important;
+    }
+
     </style>
     """, unsafe_allow_html=True)
 
+    st.html("""
+    <div style="margin-top:10px; margin-bottom:35px;">
 
-def show():
-    load_custom_css()
+        <div style="
+            display:inline-block;
+            padding:6px 14px;
+            background:rgba(37,99,235,.12);
+            color:#2563EB;
+            border-radius:30px;
+            font-size:13px;
+            font-weight:700;
+            letter-spacing:1px;
+            text-transform:uppercase;
+            margin-bottom:14px;
+            margin-top:-100rem !important;
+        ">
+            COMPANY ANALYSIS
+        </div>
 
-    st.markdown(textwrap.dedent(f"""
-    <div class="console-eyebrow">COMPANY INTELLIGENCE &middot; AI ANALYSIS</div>
-    <div class="console-title">Analyze Company</div>
-    <div class="console-sub">Get AI-powered insights about a company.</div>
-    """).strip(), unsafe_allow_html=True)
+        <h1 style="
+            font-size:42px;
+            font-weight:800;
+            color:#111827;
+            margin:14px 0 12px 0;
+            line-height:1.1;
+        ">
+            Analyze Company
+        </h1>
 
-    st.info(
-        "🤖 AI will analyze the company's industry, market presence, business size, and provide intelligent sales insights."
-    )
+        <p style="
+            font-size:17px;
+            color:#4B5563;
+            line-height:1.6;
+            max-width:760px;
+            margin:0;
+        ">
+            Analyze a company's profile using AI to generate business insights,
+            identify sales opportunities, and recommend the best sales approach.
+        </p>
 
+    </div>
+    """)
+
+    st.markdown("""
+    <div style="
+    background:rgba(255,255,255,.45);
+    border-left:6px solid #3B82F6;
+    padding:22px 28px;
+    border-radius:18px;
+    margin-bottom:30px;
+    margin-top:-30px;
+    ">
+
+    <div style="
+    font-size:18px;
+    font-weight:700;
+    color:#374151;
+    margin-bottom:8px;
+    ">
+    Quick Tip
+    </div>
+
+    <div style="
+    font-size:16px;
+    line-height:1.8;
+    color:#4B5563;
+    ">
+    Enter the <b>Company Name</b>, <b>Website</b>, and <b>Industry</b>, then click
+    <b>Analyze Company</b>. AI will evaluate the company profile, estimate lead quality,
+    identify business opportunities, and recommend the most suitable sales strategy.
+    </div>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <style>           
+
+    /* TextInput labels */
+    .stTextInput label p{
+        color:#111827 !important;
+        font-weight:600 !important;
+    }
+
+    /* Selectbox labels */
+    .stSelectbox label p{
+        color:#111827 !important;
+        font-weight:600 !important;
+    }
+
+    /* TextArea labels */
+    .stTextArea label p{
+        color:#111827 !important;
+        font-weight:600 !important;
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
+
+    
     # ---------- Form ----------
-    with st.container(border=True, key="analyze_form"):
+    
+    with st.form( key="analyze_form"):
 
         company = st.text_input("Company Name", placeholder="e.g. Microsoft")
         website = st.text_input("Website", placeholder="https://www.microsoft.com")
@@ -131,51 +205,63 @@ def show():
              "Retail", "Manufacturing", "Other"],
         )
 
-        st.markdown("""
-        <style>
-        div.st-key-analyze_form {
-            border: 1.5px solid #000000 !important;
-            border-radius: 12px !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        
+        submitted = st.form_submit_button("Analyze Company")
 
 
-        st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
-
-        if st.button("Analyze Company", use_container_width=True):
+        if submitted:
 
             if company.strip() == "":
                 st.warning("Please enter a company name.")
             else:
                 try:
-                    with st.spinner("Analyzing company…"):
+                    with st.spinner("🤖 AI is analyzing the company. Please wait..."):
                         response = requests.post(
                             f"{API_URL}/analyze-company",
-                            json={"company": company, "website": website, "industry": industry},
-                            timeout=8,
+                            json={
+                              "company": company,
+                              "website": website,
+                              "industry": industry
+                            },
+                            timeout=60,
                         )
 
                     if response.status_code == 200:
-                        data = response.json()
-
-                        st.success("Analysis Completed Successfully ✅")
+                        result = response.json()
+                        st.success("✅ Analysis Completed Successfully")
                         st.divider()
 
+                        # ---------- Top Metrics ----------
                         col1, col2 = st.columns(2)
+
                         with col1:
-                            st.metric("Company Size", data.get("company_size", "Unknown"))
-                            st.metric("Revenue", data.get("revenue", "Unknown"))
+                            st.metric("Company", result.get("company", company))
+                            st.metric("Industry", result.get("industry", "N/A"))
+
                         with col2:
-                            st.metric("👥 Employees", data.get("employees", "Unknown"))
-                            st.metric("📍 Headquarters", data.get("headquarters", "Unknown"))
+                            st.metric("Lead Score", f"{result.get('lead_score', 0)}%")
+                            st.progress(result.get("lead_score", 0) / 100)
+                            st.metric("Grade", result.get("grade", "N/A"))
 
-                        st.subheader("🤖 AI Summary")
-                        st.info(data.get("summary", "No summary available."))
+                        st.divider()
 
+                        # ---------- Summary ----------
+                        st.markdown("### Company Summary")
+                        st.write(result.get("company_summary", "Not Available"))
+
+                        st.markdown("### Sales Opportunity")
+                        st.success(result.get(
+                            "sales_opportunity",
+                            "No sales opportunity available."
+                        ))
+
+                        st.markdown("### Recommended Sales Approach")
+                        st.info(result.get(
+                            "recommended_sales_approach",
+                            "No recommendation available."
+                        ))
                     else:
-                        st.error(f"Server returned an error ({response.status_code}): {response.text}")
-
+                        st.error("Failed to analyze company. Please try again.")
                 except requests.exceptions.ConnectionError:
                     # Demo fallback when no backend is running yet
                     st.success("Analysis Completed Successfully ✅")
@@ -183,9 +269,9 @@ def show():
                     st.divider()
 
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Employees", "12,500")
-                    col2.metric("Revenue", "$5.4B")
-                    col3.metric("Growth", "18%")
+                    col1.metric("Lead Score","91%")
+                    col2.metric("Grade","A")
+                    col3.metric("Priority","High")
 
                     st.subheader("Company Overview")
                     st.info(
@@ -193,14 +279,7 @@ def show():
                     )
 
                     st.subheader("🤖 AI Insights")
-                    st.markdown("""
-- Strong digital presence.
-- Active on LinkedIn and major business platforms.
-- High B2B sales potential.
-- Excellent candidate for enterprise sales.
-- Recommended for personalized AI email outreach.
-                    """)
-
+                    
                 except requests.exceptions.Timeout:
                     st.error("The request timed out — the server took too long to respond.")
                 except Exception as e:
