@@ -6,11 +6,85 @@ from components.theme import load_theme
 
 load_theme()
 
-API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
+load_theme()
 
 
 
 
+    st.html("""
+    <div style="margin-top:10px; margin-bottom:35px;">
+
+        <div style="
+            display:inline-block;
+            padding:6px 14px;
+            background:rgba(37,99,235,.12);
+            color:#2563EB;
+            border-radius:30px;
+            font-size:13px;
+            font-weight:700;
+            letter-spacing:1px;
+            text-transform:uppercase;
+            margin-bottom:14px;
+            margin-top:-100rem !important;
+        ">
+            COMPANY ANALYSIS
+        </div>
+
+        <h1 style="
+            font-size:42px;
+            font-weight:800;
+            color:#111827;
+            margin:14px 0 12px 0;
+            line-height:1.1;
+        ">
+            Analyze Company
+        </h1>
+
+        <p style="
+            font-size:17px;
+            color:#4B5563;
+            line-height:1.6;
+            max-width:760px;
+            margin:0;
+        ">
+            Analyze a company's profile using AI to generate business insights,
+            identify sales opportunities, and recommend the best sales approach.
+        </p>
+
+    </div>
+    """)
+
+    st.markdown("""
+    <div style="
+    background:rgba(255,255,255,.45);
+    border-left:6px solid #3B82F6;
+    padding:22px 28px;
+    border-radius:18px;
+    margin-bottom:30px;
+    margin-top:-30px;
+    ">
+
+    <div style="
+    font-size:18px;
+    font-weight:700;
+    color:#374151;
+    margin-bottom:8px;
+    ">
+    Quick Tip
+    </div>
+
+    <div style="
+    font-size:16px;
+    line-height:1.8;
+    color:#4B5563;
+    ">
+    Enter the <b>Company Name</b>, <b>Website</b>, and <b>Industry</b>, then click
+    <b>Analyze Company</b>. AI will evaluate the company profile, estimate lead quality,
+    identify business opportunities, and recommend the most suitable sales strategy.
+    </div>
+
+    </div>
+    """, unsafe_allow_html=True)
 
 def show():
 
@@ -29,6 +103,10 @@ def show():
     "🎯 Enter lead details to predict conversion probability and sales priority."
 )
 
+    </style>
+    """, unsafe_allow_html=True)
+
+    
     # ---------- Form ----------
     with st.container( key="analyze_form"):
 

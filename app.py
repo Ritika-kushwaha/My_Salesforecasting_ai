@@ -15,7 +15,9 @@ st.set_page_config(
 
 # --------- Login Check -----------
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+    if st.sidebar.button("Logout", use_container_width=True):
+         st.session_state.clear()
+         st.rerun()
 
 if "user" not in st.session_state:
     st.session_state["user"] = None
@@ -94,6 +96,7 @@ st.sidebar.markdown("---")
 st.sidebar.write("")
 st.sidebar.write("")
 
+# Single divider
 st.sidebar.divider() 
 
 if st.sidebar.button("Logout"):
