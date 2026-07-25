@@ -1,15 +1,18 @@
+<<<<<<< Updated upstream
 import re
 import os
 import textwrap
 from unittest import result
+=======
+>>>>>>> Stashed changes
 import streamlit as st
 import requests
-from components.theme import load_theme
-
-load_theme()
+import pandas as pd
+import os
 
 API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
+<<<<<<< Updated upstream
 # =========================================================
 # DESIGN TOKENS  ·  matches the "Pipeline Console" dashboard theme
 # =========================================================
@@ -248,8 +251,142 @@ def show():
 
                 st.error(f"Unexpected Error:\n{e}")
    
+=======
+def show():
+    st.markdown("## 👥 Lead Management")
+    st.caption("Manage, view, and bulk import B2B leads into your pipeline.")
 
+    user_id = st.session_state.get("user", {}).get("id", 1)
 
+    # Tabs for different Lead Actions
+    tab1, tab2, tab3 = st.tabs(["📋 View All Leads", "➕ Add Single Lead", "📁 Bulk CSV Upload"])
+
+    # -------------------------------------------------------------------
+    # TAB 1: VIEW LEADS (Fixes column header display issue)
+    # -------------------------------------------------------------------
+    with tab1:
+        st.markdown("### Existing Leads")
+        if st.button("🔄 Refresh Data", type="secondary"):
+            st.rerun()
+
+        try:
+            res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=10)
+            if res.status_code == 200:
+                leads_data = res.json()
+                if leads_data:
+                    df = pd.DataFrame(leads_data)
+
+                    # Ensure proper column names and ordering
+                    display_columns = {
+                        "name": "Contact Name",
+                        "company": "Company Name",
+                        "email": "Email Address",
+                        "phone": "Phone Number",
+                        "industry": "Industry",
+                        "lead_score": "Lead Score",
+                        "priority": "Priority",
+                        "status": "Status"
+                    }
+
+                    # Clean up fallback keys if API returned alternate names
+                    if "contact_name" in df.columns and "name" not in df.columns:
+                        df["name"] = df["contact_name"]
+                    if "company_name" in df.columns and "company" not in df.columns:
+                        df["company"] = df["company_name"]
+
+                    # Filter and rename for display
+                    available_cols = [col for col in display_columns.keys() if col in df.columns]
+                    df_display = df[available_cols].rename(columns=display_columns)
+
+                    st.dataframe(df_display, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No leads found in database. Add a lead manually or upload a CSV.")
+            else:
+                st.error("Failed to load leads from backend server.")
+        except Exception as e:
+            st.error(f"Connection error: {e}")
+
+    # -------------------------------------------------------------------
+    # TAB 2: ADD SINGLE LEAD
+    # -------------------------------------------------------------------
+    with tab2:
+        st.markdown("### ➕ Add New Lead Manually")
+        with st.form("add_lead_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                name = st.text_input("Contact Name *", placeholder="e.g. John Doe")
+                company = st.text_input("Company Name *", placeholder="e.g. Acme Corp")
+                email = st.text_input("Email Address *", placeholder="e.g. john@acme.com")
+                phone = st.text_input("Phone Number", placeholder="e.g. +1 555-0192")
+>>>>>>> Stashed changes
+
+            with col2:
+                industry = st.selectbox("Industry", ["Technology", "Healthcare", "Finance", "Retail", "Manufacturing", "Other"])
+                company_size = st.selectbox("Company Size", ["1-10", "11-50", "51-200", "201-500", "500+"])
+                revenue = st.selectbox("Annual Revenue", ["<$1M", "$1M-$10M", "$10M-$50M", "$50M+"])
+                priority = st.selectbox("Priority", ["High", "Medium", "Low"])
+
+<<<<<<< Updated upstream
 if __name__ == "__main__":
     st.set_page_config(page_title="Add Lead", page_icon="➕", layout="wide")
     show()
+=======
+            submitted = st.form_submit_button("🚀 Save Lead", type="primary", use_container_width=True)
+
+            if submitted:
+                if not name or not company or not email:
+                    st.warning("⚠️ Contact Name, Company Name, and Email are required.")
+                else:
+                    payload = {
+                        "name": name,
+                        "company": company,
+                        "email": email,
+                        "phone": phone,
+                        "industry": industry,
+                        "company_size": company_size,
+                        "revenue": revenue,
+                        "priority": priority,
+                        "status": "New"
+                    }
+                    try:
+                        res = requests.post(f"{API_URL}/leads", params={"user_id": user_id}, json=payload)
+                        if res.status_code in [200, 201]:
+                            st.success(f"✅ Lead '{name}' created successfully!")
+                        else:
+                            st.error(f"Failed to add lead: {res.text}")
+                    except Exception as e:
+                        st.error(f"Error connecting to backend: {e}")
+
+    # -------------------------------------------------------------------
+    # TAB 3: BULK CSV UPLOAD
+    # -------------------------------------------------------------------
+    with tab3:
+        st.markdown("### 📁 Import Leads from CSV File")
+        st.caption("Upload a `.csv` file containing lead records.")
+
+        uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
+
+        # In Tab 3 (Bulk CSV Upload) of module1_leads.py:
+    if uploaded_file is not None:
+      try:
+        csv_df = pd.read_csv(uploaded_file)
+        
+        # CRITICAL: Replace NaN values with empty strings so JSON conversion doesn't send floats
+        csv_df = csv_df.fillna("")
+
+        st.markdown("#### 📄 Preview Uploaded Data:")
+        st.dataframe(csv_df.head(5), use_container_width=True)
+
+        if st.button("📤 Upload & Save All Leads to Database", type="primary"):
+            records = csv_df.to_dict(orient="records")
+            
+            with st.spinner("Importing leads into PostgreSQL..."):
+                res = requests.post(f"{API_URL}/leads/bulk", params={"user_id": user_id}, json=records)
+                
+                if res.status_code == 200:
+                    st.success(f"🎉 {res.json().get('message', 'Leads imported successfully!')}")
+                else:
+                    st.error(f"Failed to bulk upload leads: {res.text}")
+      except Exception as e:
+        st.error(f"Could not parse CSV file: {e}")
+>>>>>>> Stashed changes

@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import os
 
 import streamlit as st
@@ -5,9 +6,15 @@ import requests
 from components.theme import load_theme
 
 load_theme()
+=======
+import streamlit as st
+import requests
+import os
+>>>>>>> Stashed changes
 
 load_theme()
 
+<<<<<<< Updated upstream
 
 
 
@@ -202,3 +209,67 @@ def show():
 if __name__ == "__main__":
     st.set_page_config(page_title="Analyze Company", page_icon="🔎", layout="wide")
     show()
+=======
+def show():
+    st.markdown("## 🏢 Company Intelligence & Prospect Analysis")
+    st.caption("Perform AI-driven research on targeted company profiles.")
+
+    user_id = st.session_state.get("user", {}).get("id", 1)
+
+    c1, c2 = st.columns([1, 1.2])
+
+    with c1:
+        st.markdown("### 🔍 Analyze Company Profile")
+        
+        with st.form("company_analysis_form"):
+            company_name = st.text_input("Company Name *", placeholder="e.g. Acme Corp").strip()
+            website = st.text_input("Website URL", placeholder="e.g. https://acme.com").strip()
+            industry = st.text_input("Industry", placeholder="e.g. Enterprise Software").strip()
+            
+            submit_btn = st.form_submit_button("🤖 Analyze & Generate Insights", type="primary", use_container_width=True)
+
+        if submit_btn:
+            # Frontend Input Checks
+            if not company_name:
+                st.warning("⚠️ Company Name is required.")
+            elif len(company_name) < 2:
+                st.warning("⚠️ Please enter a valid Company Name.")
+            else:
+                with st.spinner("Analyzing company profile with Gemini AI..."):
+                    try:
+                        res = requests.post(
+                            f"{API_URL}/analyze-company",
+                            params={"user_id": user_id},
+                            json={
+                                "company": company_name,
+                                "website": website,
+                                "industry": industry,
+                            },
+                            timeout=20,
+                        )
+                        if res.status_code == 200:
+                            st.session_state["company_result"] = res.json()
+                            st.success("Analysis complete!")
+                        else:
+                            st.error(f"Error ({res.status_code}): {res.json().get('detail', res.text)}")
+                    except Exception as e:
+                        st.error(f"Connection failed: {e}")
+
+    with c2:
+        st.markdown("### 📊 AI Intelligence Output")
+        result = st.session_state.get("company_result")
+        
+        if result:
+            st.metric("Lead Score", f"{result.get('lead_score', 0)} / 100", f"Grade {result.get('grade', 'N/A')}")
+            
+            st.markdown("#### 📝 Business Overview")
+            st.info(result.get("company_summary", "No summary available."))
+            
+            st.markdown("#### 🎯 Sales Opportunity")
+            st.write(result.get("sales_opportunity", "N/A"))
+            
+            st.markdown("#### 🚀 Recommended Sales Approach")
+            st.success(result.get("recommended_sales_approach", "N/A"))
+        else:
+            st.info("👈 Fill out the company form and click analyze to view generated insights.")
+>>>>>>> Stashed changes

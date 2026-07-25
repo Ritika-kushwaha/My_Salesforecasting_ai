@@ -28,34 +28,37 @@ CYAN = "#06B6D4"
 
 
 def load_theme():
-    st.markdown(
-    f"""
-<style>
+    st.markdown("""
+    <style>
+    /* Dark Theme Core */
+    .stApp {
+        background-color: #0b0f19;
+        color: #f3f4f6;
+    }
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    /* Sidebar - Fixed display issue */
+    [data-testid="stSidebar"] {
+        background-color: #0d1117;
+        border-right: 1px solid #1f2937;
+    }
 
-html,
-body,
-[class*="css"] {{
-    font-family: Inter;
-}}
+    /* Input Fields */
+    .stTextInput input, .stSelectbox select, .stTextArea textarea {
+        background-color: #111827 !important;
+        color: #f3f4f6 !important;
+        border: 1px solid #374151 !important;
+        border-radius: 8px !important;
+    }
 
-.stApp {{
-    background: linear-gradient(
-        135deg,
-        #EEF5FF,
-        #DCEBFF,
-        #CCE0FF
-    );
-}}
+    /* Buttons */
+    .stButton>button {
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+    }
 
-.block-container {{
-    padding-top:2rem;
-    padding-left:2rem;
-    padding-right:2rem;
-}}
-
-</style>
-""",
-unsafe_allow_html=True
-)
+    /* Cards/Containers */
+    div[data-testid="stVerticalBlock"] > div {
+        border-radius: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)

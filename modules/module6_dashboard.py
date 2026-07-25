@@ -354,8 +354,24 @@ def get_leads_data():
 
         leads = response.json()
 
+<<<<<<< Updated upstream
         if len(leads) == 0:
             return pd.DataFrame()
+=======
+def render_dashboard():
+    inject_custom_css()
+    
+    # Extract user information from session state
+    user_info = st.session_state.get("user", {})
+    user_id = st.session_state.get("user", {}).get("id")
+    user_name = user_info.get("name", "User")
+    today_str = datetime.now().strftime("%b %d, %Y")
+    
+    # Handle missing session state
+    if not user_id:
+        st.warning("⚠️ User session not found. Please log out and log in again.")
+        st.stop()
+>>>>>>> Stashed changes
 
         df = pd.DataFrame(leads)
 
