@@ -10,11 +10,16 @@ class UserLogin(BaseModel):
     email: str
     password: str
 class LeadCreate(BaseModel):
+
     name: str
     email: str
     phone: str
+
     company: str
     industry: str
+
+    company_size: str
+    revenue: float
 class LeadUpdate(BaseModel):
     name: str
     email: str

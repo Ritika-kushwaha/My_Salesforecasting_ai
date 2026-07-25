@@ -1,37 +1,54 @@
-import streamlit as st
+import os
 import requests
+import streamlit as st
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
-def login():
 
-    st.title("Login")
+def render_login_page():
+    st.markdown("## 🔐 Login to SalesGenie AI")
 
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
-
-    if st.button("Login"):
-
-        response = requests.post(
-            f"{API_URL}/login",
-            json={
-                "email": email,
-                "password": password
-            }
+    with st.form("login_form"):
+        email = st.text_input("Email", placeholder="name@company.com")
+        password = st.text_input("Password", type="password")
+        submit_btn = st.form_submit_button(
+            "🔓 Log In", type="primary", use_container_width=True
         )
 
-        if response.status_code == 200:
-            st.success("Login Successful")
-            user = response.json()["user"]
-            st.session_state.logged_in = True
-            st.session_state.user = user
-            st.rerun()
+    if submit_btn:
+        if not email.strip() or not password.strip():
+            st.warning("⚠️ Please fill in both email and password.")
+            return
 
-        else:
-            st.error(response.json()["detail"])
+        try:
+            res = requests.post(
+                f"{API_URL}/login",
+                json={"email": email.strip(), "password": password.strip()},
+                timeout=10,
+            )
 
-    st.write("Don't have an account?")
+            if res.status_code == 200:
+                data = res.json()
+                st.session_state["logged_in"] = True
+                st.session_state["user"] = data.get("user", {})
+                st.success("✅ Login Successful!")
+                st.rerun()
+            elif res.status_code == 401:
+                st.error("❌ Invalid email or password.")
+            else:
+                st.error(f"Error {res.status_code}: {res.text}")
 
-    if st.button("Create Account"):
-        st.session_state.page = "signup"
-        st.rerun()
+        except requests.exceptions.ConnectionError:
+            st.error(
+                f"Cannot connect to FastAPI backend at `{API_URL}`. Make sure Uvicorn is running."
+            )
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
+
+
+# Map all possible caller function names so main.py never throws an AttributeError
+login = render_login_page
+show = render_login_page
+
+if __name__ == "__main__":
+    render_login_page()
