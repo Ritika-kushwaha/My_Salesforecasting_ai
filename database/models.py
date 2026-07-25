@@ -1,51 +1,80 @@
-from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.sql import func
-
 from database.database import Base
-
-
-class Lead(Base):
-    __tablename__ = "leads"
-
-    id = Column(Integer, primary_key=True, index=True)
-<<<<<<< Updated upstream
-    name = Column(String(100), nullable=False)
-    email = Column(String(100), unique=True, nullable=False)
-    phone = Column(String(20))
-    company = Column(String(100))
-    industry = Column(String(100))
-=======
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-
-    # Use 'company' and 'name' to match your database schema
-    name = Column(String(100), nullable=True)
-    company = Column(String(100), nullable=False)
-    email = Column(String(100), nullable=False)
-    phone = Column(String(30), nullable=True)
-    industry = Column(String(100), nullable=True)
-    company_size = Column(String(50), nullable=True)
-    revenue = Column(String(50), nullable=True)
-    lead_score = Column(Integer, default=0)
-    priority = Column(String(20), default="Medium")
->>>>>>> Stashed changes
-    status = Column(String(30), default="New")
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True)
-    password = Column(String, nullable=False)
+    name = Column(String(100), nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    password = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    leads = relationship("Lead", back_populates="owner", cascade="all, delete-orphan")
+    companies = relationship("Company", back_populates="owner", cascade="all, delete-orphan")
+
+
+class Lead(Base):
+    __tablename__ = "leads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Main Lead Details
+    name = Column(String(100), nullable=False)
+    company = Column(String(100), nullable=False)
+    email = Column(String(100), nullable=False, index=True)
+    phone = Column(String(30), nullable=True)
+    industry = Column(String(100), nullable=True, default="General")
+    company_size = Column(String(50), nullable=True, default="1-10")
+    revenue = Column(String(50), nullable=True, default="N/A")
+    
+    # Lead Metrics & Status
+    lead_score = Column(Integer, default=0)
+    priority = Column(String(20), default="Medium")
+    status = Column(String(30), default="New")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    owner = relationship("User", back_populates="leads")
+    conversations = relationship(
+        "Conversation", back_populates="lead", cascade="all, delete-orphan"
+    )
+    # Enforce unique lead emails per user (prevents duplicates)
+    __table_args__ = (
+        UniqueConstraint("user_id", "email", name="unique_user_lead_email"),
+    )
+
 
 class Company(Base):
     __tablename__ = "companies"
 
     id = Column(Integer, primary_key=True, index=True)
-    company_name = Column(String(100), nullable=False)
-    website = Column(String(255))
-    industry = Column(String(100))
-    description = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    company_name = Column(String(100), nullable=False, index=True)
+    website = Column(String(255), nullable=True)
+    industry = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    owner = relationship("User", back_populates="companies")
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False)
+
+    sender = Column(String(20), nullable=False)  # 'User', 'Lead', or 'AI'
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    lead = relationship("Lead", back_populates="conversations")
