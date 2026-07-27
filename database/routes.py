@@ -5,7 +5,7 @@ import traceback
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from google import genai
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from database.database import get_db
@@ -89,7 +89,7 @@ def login(data: dict, db: Session = Depends(get_db)):
 # =====================================================================
 
 
-# --- GET ALL LEADS (No user_id filtering) ---
+# --- GET ALL LEADS ---
 @router.get("/leads")
 def get_leads(db: Session = Depends(get_db)):
     leads = db.query(Lead).all()
@@ -114,89 +114,101 @@ def get_leads(db: Session = Depends(get_db)):
     return result
 
 
-# --- DASHBOARD METRICS (No user_id filtering) ---
-@router.get("/dashboard")
-def get_dashboard_data(db: Session = Depends(get_db)):
-    query_leads = db.query(Lead)
-    total_leads = query_leads.count()
+# --- CREATE SINGLE LEAD ---
+@router.post("/leads")
+def create_lead(data: dict, user_id: int = 1, db: Session = Depends(get_db)):
+    name = data.get("name") or data.get("contact_name")
+    company = data.get("company") or data.get("company_name")
+    email = data.get("email")
 
-    high_priority_count = query_leads.filter(func.lower(Lead.priority) == "high").count()
-
-    qualified_count = 0
-    try:
-        qualified_count = query_leads.filter(func.lower(Lead.status) == "qualified").count()
-    except Exception:
-        qualified_count = 0
-
-    conversion_rate = (
-        round((qualified_count / total_leads) * 100, 1) if total_leads > 0 else 0.0
-    )
-
-    return {
-        "total_leads": total_leads,
-        "high_priority_leads": high_priority_count,
-        "qualified_leads": qualified_count,
-        "conversion_rate": conversion_rate,
-    }
-
-
-@router.delete("/leads/{lead_id}")
-def delete_lead(lead_id: int, user_id: int = 1, db: Session = Depends(get_db)):
-    try:
-        # 1. Fetch target lead for the user
-        lead = (
-            db.query(Lead)
-            .filter(Lead.id == lead_id, Lead.user_id == user_id)
-            .first()
+    if not name or not company or not email:
+        raise HTTPException(
+            status_code=400, detail="Name, Company, and Email are required."
         )
-        if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
 
-        # 2. Delete linked conversations first
-        db.query(Conversation).filter(
-            Conversation.lead_id == lead_id
-        ).delete(synchronize_session=False)
+    new_lead = Lead(
+        user_id=user_id,
+        name=name,
+        company=company,
+        email=email,
+        phone=data.get("phone", ""),
+        industry=data.get("industry", "General"),
+        company_size=data.get("company_size", "1-10"),
+        revenue=data.get("revenue", "0"),
+        priority=data.get("priority", "Medium"),
+        status=data.get("status", "New"),
+    )
+    db.add(new_lead)
+    db.commit()
+    db.refresh(new_lead)
+    return {"message": "Lead created successfully", "lead_id": new_lead.id}
+
+
+# --- UPDATE LEAD ---
+@router.put("/leads/{lead_id}")
+def update_lead(lead_id: int, data: dict, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(
+            status_code=404, detail=f"Lead with ID #{lead_id} not found."
+        )
+
+    try:
+        if "name" in data and data["name"]:
+            lead.name = data["name"]
+        if "company" in data and data["company"]:
+            lead.company = data["company"]
+        if "email" in data and data["email"]:
+            lead.email = data["email"]
+        if "phone" in data:
+            lead.phone = data["phone"]
+        if "industry" in data:
+            lead.industry = data["industry"]
+        if "priority" in data:
+            lead.priority = data["priority"]
+        if "status" in data:
+            lead.status = data["status"]
+
         db.commit()
-
-        # 3. Delete the lead
-        db.delete(lead)
-        db.commit()
-
-        return {"message": f"Lead {lead_id} successfully deleted"}
-
-    except HTTPException as http_ex:
-        db.rollback()
-        raise http_ex
+        db.refresh(lead)
+        return {"message": f"Lead {lead_id} updated successfully", "lead": data}
 
     except Exception as e:
         db.rollback()
-        # Print exact traceback in Uvicorn terminal for debugging
-        print("\n--- DELETE ERROR TRACEBACK ---")
-        traceback.print_exc()
-        print("------------------------------\n")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update lead: {str(e)}"
+        )
 
+
+# --- DELETE LEAD ---
+@router.delete("/leads/{lead_id}")
+def delete_lead(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(
+            status_code=404, detail=f"Lead with ID #{lead_id} not found."
+        )
+
+    try:
+        # Delete related conversation records first to prevent foreign key errors
+        db.execute(
+            text("DELETE FROM conversations WHERE lead_id = :lead_id"),
+            {"lead_id": lead_id},
+        )
+
+        db.delete(lead)
+        db.commit()
+
+        return {"message": f"Lead #{lead_id} deleted successfully"}
+
+    except Exception as e:
+        db.rollback()
         raise HTTPException(
             status_code=500, detail=f"Database deletion error: {str(e)}"
         )
-    
-@router.delete("/leads/{lead_id}")
-def delete_lead(lead_id: int, user_id: int = 1, db: Session = Depends(get_db)):
-    try:
-        lead = db.query(Lead).filter(Lead.id == lead_id, Lead.user_id == user_id).first()
-        if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
-        
-        db.delete(lead)
-        db.commit()
-        return {"message": f"Lead {lead_id} deleted successfully"}
 
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Database deletion error: {str(e)}"
-        )
 
+# --- BULK CSV IMPORT ---
 @router.post("/leads/bulk")
 def create_leads_bulk(
     leads: List[dict], user_id: int = 1, db: Session = Depends(get_db)
@@ -204,7 +216,6 @@ def create_leads_bulk(
     try:
         created_count = 0
 
-        # Fetch existing emails to avoid insertion failures if uniquely constrained
         existing_emails = {
             l[0].lower()
             for l in db.query(Lead.email).filter(Lead.user_id == user_id).all()
@@ -230,11 +241,9 @@ def create_leads_bulk(
                 f"contact@{company_val.lower().replace(' ', '')}.com",
             ).lower()
 
-            # Skip if lead already exists
             if email_val in existing_emails:
                 continue
 
-            # Safely handle numeric or string values for revenue
             raw_rev = lead.get("revenue")
             rev_val = "N/A"
             if raw_rev is not None and not (
@@ -287,7 +296,6 @@ def analyze_company(
         )
 
     if not client:
-        # Structured fallback if GEMINI_API_KEY is not configured
         result = {
             "company": company_name,
             "industry": industry,
@@ -332,7 +340,6 @@ Return ONLY valid JSON in this exact structure:
                 "recommended_sales_approach": "Introductory outreach campaign.",
             }
 
-    # Record or update company in Database
     existing = (
         db.query(Company)
         .filter(
@@ -359,3 +366,26 @@ Return ONLY valid JSON in this exact structure:
 # =====================================================================
 
 
+@router.get("/dashboard")
+def get_dashboard_data(db: Session = Depends(get_db)):
+    query_leads = db.query(Lead)
+    total_leads = query_leads.count()
+
+    high_priority_count = query_leads.filter(func.lower(Lead.priority) == "high").count()
+
+    qualified_count = 0
+    try:
+        qualified_count = query_leads.filter(func.lower(Lead.status) == "qualified").count()
+    except Exception:
+        qualified_count = 0
+
+    conversion_rate = (
+        round((qualified_count / total_leads) * 100, 1) if total_leads > 0 else 0.0
+    )
+
+    return {
+        "total_leads": total_leads,
+        "high_priority_leads": high_priority_count,
+        "qualified_leads": qualified_count,
+        "conversion_rate": conversion_rate,
+    }
