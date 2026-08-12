@@ -16,6 +16,7 @@ class User(Base):
     # Relationships
     leads = relationship("Lead", back_populates="owner", cascade="all, delete-orphan")
     companies = relationship("Company", back_populates="owner", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="owner", cascade="all, delete-orphan")
 
 
 class Lead(Base):
@@ -44,7 +45,7 @@ class Lead(Base):
     conversations = relationship(
         "Conversation", back_populates="lead", cascade="all, delete-orphan"
     )
-    # Enforce unique lead emails per user (prevents duplicates)
+
     __table_args__ = (
         UniqueConstraint("user_id", "email", name="unique_user_lead_email"),
     )
@@ -70,11 +71,17 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False)
 
-    sender = Column(String(20), nullable=False)  # 'User', 'Lead', or 'AI'
-    message = Column(Text, nullable=False)
+    interaction_type = Column(String(50), default="Call")
+    transcript = Column(Text, nullable=True)
+    summary = Column(Text, nullable=True)
+    sender = Column(String(20), nullable=True, default="AI")
+    message = Column(Text, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     lead = relationship("Lead", back_populates="conversations")
+    owner = relationship("User", back_populates="conversations")

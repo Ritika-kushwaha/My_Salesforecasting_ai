@@ -1,140 +1,136 @@
-import os
-import requests
 import streamlit as st
+import requests
+import os
+from datetime import datetime
 
 API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
-
 def show():
-    st.markdown("## 💬 Conversation Intelligence & CRM Sync")
-    st.caption("Live CRM activity tracking and AI-powered transcript analysis.")
+    st.title("💬 Module 5: Conversation Intelligence & CRM")
+    st.caption("Analyze sales calls, extract action items, and sync interactions with PostgreSQL.")
 
-    # 1. FETCH USER LEADS FROM BACKEND DATABASE
+    # ✅ SAFE CODE (Handles None values, empty dicts, or missing keys)
+    user_data = st.session_state.get("user") or {}
+    user_id = user_data.get("id", 1) if isinstance(user_data, dict) else st.session_state.get("user_id", 1)
+
+    # 2. Fetch Leads from Backend API
+    leads_list = []
     try:
-        res = requests.get(f"{API_URL}/leads", timeout=10)
-        leads_data = res.json() if res.status_code == 200 else []
-    except Exception:
-        leads_data = []
+        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=10)
+        if res.status_code == 200:
+            leads_list = res.json()
+    except Exception as e:
+        st.warning(f"Unable to reach backend database at {API_URL}. Ensure Uvicorn is running.")
 
-    if not leads_data:
-        st.info("💡 No prospects available. Please add leads in **Lead Management** first.")
+    if not leads_list:
+        st.info("💡 No leads found in your account database. Please add leads in 'Lead Management' first.")
         return
 
-    # Dynamic Lead Selector
-    lead_map = {
-        f"{l.get('name') or l.get('contact_name', 'Contact')} ({l.get('company') or l.get('company_name', 'Company')})": l
-        for l in leads_data
-    }
-    selected_label = st.selectbox("Select Target Deal for Activity & Intelligence", options=list(lead_map.keys()))
-    lead = lead_map[selected_label]
+    # Formulate Lead Selector Map
+    lead_options = {}
+    for lead in leads_list:
+        l_id = lead.get("id") or lead.get("lead_id")
+        l_name = lead.get("name") or lead.get("contact_name", "Unknown Contact")
+        l_comp = lead.get("company") or lead.get("company_name", "Unknown Company")
+        lead_options[f"{l_name} ({l_comp})"] = l_id
 
-    st.divider()
+    # UI Layout: Column Selection
+    col_select, col_info = st.columns([2, 1])
+    with col_select:
+        selected_lead_label = st.selectbox("🎯 Select Lead / Prospect for Meeting Analysis:", list(lead_options.keys()))
+        selected_lead_id = lead_options[selected_lead_label]
 
-    # 2. CRM SYNC STATUS PANEL (DYNAMIC FOR SELECTED LEAD)
-    st.markdown("### 🔄 CRM Sync Status Panel")
-    c1, c2, c3, c4 = st.columns(4)
+    # Find full selected lead dict
+    selected_lead = next((l for l in leads_list if (l.get("id") == selected_lead_id or l.get("lead_id") == selected_lead_id)), {})
 
-    c1.success("✅ **Contact Synced**")
-    c1.caption(f"ID #{lead.get('id')}: {lead.get('name', 'N/A')}")
+    with col_info:
+        st.markdown(f"**Industry:** `{selected_lead.get('industry', 'N/A')}`")
+        st.markdown(f"**Current Status:** `{selected_lead.get('status', 'New')}`")
+        st.markdown(f"**Priority:** `{selected_lead.get('priority', 'Medium')}`")
 
-    c2.success("✅ **Email Logged**")
-    c2.caption(f"{lead.get('email', 'N/A')}")
+    st.markdown("---")
 
-    c3.info("⚡ **Deal Stage**")
-    c3.caption(f"Status: {lead.get('status', 'New')}")
+    # Tabs for Input & Recent History
+    tab_analyze, tab_history = st.tabs(["🤖 AI Transcript Summarizer", "📜 Interaction History"])
 
-    c4.warning("📌 **Priority Level**")
-    c4.caption(f"Priority: {lead.get('priority', 'Medium')}")
-
-    st.divider()
-
-    # Two Column Layout: AI Summarizer vs Activity Logging
-    col_summary, col_activity = st.columns([1.2, 1], gap="large")
-
-    # 3. LIVE TRANSCRIPT & MEETING SUMMARIZER
-    with col_summary:
-        st.markdown("### 🎙️ AI Call & Meeting Summarizer")
-        st.caption("Paste any raw call notes or transcripts below to analyze them dynamically with Gemini AI.")
-
-        # Text area accepts ANY dynamic text provided by the user
-        user_transcript = st.text_area(
-            "Enter Call Transcript or Interaction Notes:",
-            placeholder=f"e.g. Spoke with {lead.get('name')} from {lead.get('company')}. They are looking to implement AI outreach to reduce manual workload...",
-            height=150,
+    with tab_analyze:
+        st.subheader("🎙️ Input Call Transcript or Meeting Notes")
+        transcript_text = st.text_area(
+            "Paste Meeting Notes, Email Threads, or Call Transcripts:",
+            height=180,
+            placeholder="e.g., Met with VP of Technology. They expressed strong interest in our AI automation features but requested custom enterprise SLAs. Target closing Q3..."
         )
 
-        if st.button("🤖 Analyze Transcript with Gemini AI", type="primary", use_container_width=True):
-            if not user_transcript.strip():
-                st.warning("⚠️ Please type or paste a transcript before running AI analysis.")
+        call_type = st.selectbox("Interaction Type:", ["Discovery Call", "Demo Meeting", "Follow-up Email", "Closing Pitch"])
+
+        if st.button("🚀 Analyze & Extract Intelligence", type="primary"):
+            if not transcript_text.strip():
+                st.error("Please enter transcript text before analyzing.")
             else:
-                with st.spinner("Analyzing transcript and extracting key insights..."):
-                    # Call Gemini endpoint via API
-                    try:
-                        ai_res = requests.post(
-                            f"{API_URL}/analyze-company",
-                            json={
-                                "company": lead.get("company", "Company"),
-                                "industry": lead.get("industry", "General"),
-                                "website": user_transcript,
-                            },
-                            timeout=15,
-                        )
-                        if ai_res.status_code == 200:
-                            ai_data = ai_res.json()
-                            summary = ai_data.get("company_summary", "Discussion completed.")
-                            opportunity = ai_data.get("sales_opportunity", "Explore product demo.")
-                            approach = ai_data.get("recommended_sales_approach", "Follow up with pricing.")
-                        else:
-                            summary = f"Transcript analysis completed for {lead.get('name')}."
-                            opportunity = "Identify core technical pain points and integration requirements."
-                            approach = "Send follow-up email with custom proposal."
-                    except Exception:
-                        summary = f"Discussion logged for {lead.get('company')}."
-                        opportunity = "Review requirements and schedule follow-up."
-                        approach = "Send technical documentation."
-
-                    st.session_state[f"summary_{lead['id']}"] = {
-                        "summary": summary,
-                        "opportunity": opportunity,
-                        "approach": approach,
+                with st.spinner("Processing transcript with Gemini AI..."):
+                    payload = {
+                        "lead_id": selected_lead_id,
+                        "transcript": transcript_text,
+                        "interaction_type": call_type
                     }
+                    try:
+                        # API call to process conversation and save to database
+                        response = requests.post(
+                            f"{API_URL}/analyze-conversation",
+                            json=payload,
+                            params={"user_id": user_id},
+                            timeout=25
+                        )
+                        if response.status_code == 200:
+                            data = response.json().get("data", {})
+                            st.success("✅ Interaction analyzed and saved to PostgreSQL successfully!")
 
-        # Render dynamically generated summary if available
-        saved_summary = st.session_state.get(f"summary_{lead['id']}")
-        if saved_summary:
-            st.markdown("#### 📝 Key Discussion Points")
-            st.info(saved_summary["summary"])
+                            # Display Results Cards
+                            res_col1, res_col2 = st.columns(2)
+                            with res_col1:
+                                st.markdown("### 📋 Executive Summary")
+                                st.info(data.get("summary", "Summary compiled from call notes."))
 
-            st.markdown("#### 🎯 Identified Opportunities")
-            st.warning(saved_summary["opportunity"])
+                                st.markdown("### 🎯 Key Discussion Points")
+                                points = data.get("key_points", ["Customer requirements discussed.", "Timeline evaluated."])
+                                for pt in points:
+                                    st.write(f"• {pt}")
 
-            st.markdown("#### 📋 Recommended Action Items")
-            st.success(saved_summary["approach"])
+                            with res_col2:
+                                st.markdown("### ⚡ Next Action Items")
+                                actions = data.get("action_items", ["Follow up by end of week."])
+                                for act in actions:
+                                    st.write(f"✅ {act}")
 
-    # 4. CRM ACTIVITY FEED & MANUAL LOGGING
-    with col_activity:
-        st.markdown("### 📜 Activity Feed")
-        st.caption(f"Interaction history for **{lead.get('company')}**")
+                                st.markdown("### 📈 Stage Recommendation")
+                                st.success(f"Recommended Lead Status: **{data.get('recommended_stage', 'Qualified')}**")
+                        else:
+                            st.error(f"Backend returned error {response.status_code}: {response.text}")
+                    except Exception as ex:
+                        st.error(f"Error connecting to server: {ex}")
 
-        st.markdown(f"""
-        * 📩 **Contact Record Created** — `{lead.get('email', 'N/A')}`
-        * 📊 **Initial Lead Score Assigned** — Priority: `{lead.get('priority')}`
-        * 🏢 **Industry Category Tagged** — `{lead.get('industry')}`
-        """)
-
-        st.divider()
-
-        with st.expander("➕ Log New Activity Note", expanded=True):
-            with st.form("log_note_form", clear_on_submit=True):
-                activity_type = st.selectbox("Activity Type", ["Cold Call", "Email Reply", "Demo Call", "Meeting Note"])
-                activity_note = st.text_area("Notes")
-
-                if st.form_submit_button("💾 Save Activity", type="primary", use_container_width=True):
-                    if not activity_note.strip():
-                        st.warning("Please enter note details.")
-                    else:
-                        st.success(f"✅ Logged '{activity_type}' for {lead.get('name')}!")
-
+    with tab_history:
+        st.subheader(f"📜 Logged Interactions for {selected_lead_label}")
+        try:
+            hist_res = requests.get(
+                f"{API_URL}/conversations",
+                params={"lead_id": selected_lead_id, "user_id": user_id},
+                timeout=10
+            )
+            if hist_res.status_code == 200:
+                history_data = hist_res.json()
+                if history_data:
+                    for item in history_data:
+                        with st.expander(f"🗓️ {item.get('created_at', 'Recent')} - {item.get('interaction_type', 'Call')}"):
+                            st.write(f"**Notes/Transcript:** {item.get('transcript', '')}")
+                            if item.get('summary'):
+                                st.info(f"**AI Summary:** {item.get('summary')}")
+                else:
+                    st.write("No recorded interactions found for this lead in PostgreSQL.")
+            else:
+                st.write("Unable to fetch interaction history.")
+        except Exception as e:
+            st.write(f"Error loading history: {e}")
 
 if __name__ == "__main__":
     show()

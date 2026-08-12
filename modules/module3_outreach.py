@@ -9,9 +9,11 @@ def show():
     st.markdown("## ✉️ AI Outreach & Campaign Generator")
     st.caption("Generate personalized sales emails, LinkedIn messages, and cold call scripts.")
 
-    user_id = st.session_state.get("user", {}).get("id", 1)
+    # ✅ SAFE CODE (Handles None values, empty dicts, or missing keys)
+    user_data = st.session_state.get("user") or {}
+    user_id = user_data.get("id", 1) if isinstance(user_data, dict) else st.session_state.get("user_id", 1)
 
-    # Fetch existing leads to populate selection dropdown
+    # Fetch existing leads from PostgreSQL to populate selection dropdown
     leads_list = []
     try:
         res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=10)
@@ -26,19 +28,15 @@ def show():
         st.markdown("### 🎯 Outreach Configuration")
 
         with st.form("outreach_form"):
-            # Select Lead
             lead_options = {
                 f"{l.get('name', 'N/A')} ({l.get('company', 'N/A')})": l
                 for l in leads_list
             }
             
-            selected_lead_label = st.selectbox(
-                "Select Target Lead",
-                options=list(lead_options.keys()) if lead_options else ["Manual Input"],
-            )
+            options_keys = list(lead_options.keys()) + ["Manual Input"] if lead_options else ["Manual Input"]
+            selected_lead_label = st.selectbox("Select Target Lead", options=options_keys)
 
-            # Manual inputs if no lead is selected or available
-            if not lead_options or selected_lead_label == "Manual Input":
+            if selected_lead_label == "Manual Input":
                 target_name = st.text_input("Contact Name", placeholder="e.g. John Smith")
                 target_company = st.text_input("Company Name", placeholder="e.g. Acme Corp")
                 target_industry = st.text_input("Industry", placeholder="e.g. Technology")
@@ -47,7 +45,7 @@ def show():
                 target_name = chosen_lead.get("name", "")
                 target_company = chosen_lead.get("company", "")
                 target_industry = chosen_lead.get("industry", "Technology")
-                st.info(f"📧 Email: {chosen_lead.get('email', 'N/A')}")
+                st.info(f"📧 Target Email: `{chosen_lead.get('email', 'N/A')}`")
 
             channel = st.selectbox(
                 "Outreach Channel",
@@ -70,40 +68,29 @@ def show():
             if not target_name or not target_company:
                 st.warning("⚠️ Contact Name and Company Name are required.")
             else:
-                with st.spinner("Crafting personalized message..."):
-                    # Call Gemini AI endpoint or backend route
+                with st.spinner("Crafting personalized message with Gemini AI..."):
                     payload = {
+                        "name": target_name,
                         "company": target_company,
                         "industry": target_industry,
-                        "website": "Not Provided",
+                        "channel": channel,
+                        "tone": tone,
+                        "value_prop": key_value_prop,
                     }
                     try:
-                        res = requests.post(f"{API_URL}/analyze-company", params={"user_id": user_id}, json=payload)
+                        res = requests.post(f"{API_URL}/generate-outreach", params={"user_id": user_id}, json=payload, timeout=20)
                         if res.status_code == 200:
-                            comp_data = res.json()
-                            approach = comp_data.get("recommended_sales_approach", "")
+                            data = res.json()
+                            st.session_state["outreach_result"] = {
+                                "subject": data.get("subject", f"Quick question for {target_company}"),
+                                "body": data.get("body", "Failed to generate body text."),
+                                "channel": channel,
+                            }
+                            st.success("Outreach message generated successfully!")
                         else:
-                            approach = "Focus on ROI and efficiency gains."
-                    except Exception:
-                        approach = "Focus on ROI and efficiency gains."
-
-                    # Generate copy string
-                    generated_subject = f"Quick question regarding {target_company}'s growth goals"
-                    generated_body = (
-                        f"Hi {target_name},\n\n"
-                        f"I came across {target_company} and was impressed by your work in the {target_industry} space. "
-                        f"{approach}\n\n"
-                        f"{key_value_prop if key_value_prop else 'We specialize in AI solutions designed to streamline outreach.'}\n\n"
-                        f"Would you be open to a quick 10-minute chat this Thursday?\n\n"
-                        f"Best regards,\nSalesGenie Team"
-                    )
-
-                    st.session_state["outreach_result"] = {
-                        "subject": generated_subject,
-                        "body": generated_body,
-                        "channel": channel,
-                    }
-                    st.success("Outreach message generated!")
+                            st.error(f"Error {res.status_code}: {res.text}")
+                    except Exception as e:
+                        st.error(f"Error connecting to backend server: {e}")
 
     with c2:
         st.markdown("### 📝 Generated Copy")
@@ -112,10 +99,10 @@ def show():
         if result:
             st.caption(f"Channel: **{result.get('channel')}**")
             
-            if "Email" in result.get("channel", ""):
+            if "Email" in result.get("channel", "") or "Cold Email" in result.get("channel", ""):
                 st.text_input("Subject Line", value=result.get("subject"), key="outreach_subj")
 
-            st.text_area("Message Content", value=result.get("body"), height=300, key="outreach_body")
+            st.text_area("Message Content", value=result.get("body"), height=320, key="outreach_body")
 
             b1, b2 = st.columns(2)
             with b1:
@@ -126,6 +113,8 @@ def show():
                     st.success("Campaign queued successfully!")
         else:
             st.info("👈 Configure parameters on the left and click **Generate** to create outreach copy.")
+
+    
 
 
 if __name__ == "__main__":

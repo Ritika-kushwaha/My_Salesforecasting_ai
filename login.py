@@ -5,60 +5,76 @@ import streamlit as st
 API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
 
-def render_login_page():
-    st.markdown("## 🔐 Login to SalesGenie AI")
-    st.caption("Enter your credentials to access your sales workspace.")
-
-    with st.form("login_form", clear_on_submit=False):
-        email = st.text_input("Email Address", placeholder="name@company.com").strip()
-        password = st.text_input("Password", type="password", placeholder="••••••••").strip()
-        
-        submit_btn = st.form_submit_button(
-            "🔓 Log In", type="primary", use_container_width=True
-        )
-
-    if submit_btn:
-        if not email or not password:
-            st.warning("⚠️ Please fill in both email and password.")
-            return
-
-        try:
-            res = requests.post(
-                f"{API_URL}/login",
-                json={"email": email, "password": password},
-                timeout=10,
-            )
-
-            if res.status_code == 200:
-                data = res.json()
-                st.session_state["logged_in"] = True
-                st.session_state["user"] = data.get("user", {})
-                st.session_state["active_tab"] = "Dashboard"
-                st.success("✅ Login Successful!")
-                st.rerun()
-            elif res.status_code == 401:
-                st.error("❌ Invalid email or password.")
-            else:
-                st.error(f"Error ({res.status_code}): {res.text}")
-
-        except requests.exceptions.ConnectionError:
-            st.error(
-                f"Cannot connect to FastAPI backend at `{API_URL}`. Make sure Uvicorn server is running."
-            )
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
-
-    st.markdown("---")
-    st.markdown("Don't have an account yet?")
-    if st.button("📝 Create an Account", type="secondary", use_container_width=True):
-        st.session_state["page"] = "signup"
-        st.rerun()
-
-
-# Function Aliases for flexible calling from main.py
 def show():
-    render_login_page()
+    st.markdown("<h2 style='text-align: center;'>🔐 Log In to SalesGenie</h2>", unsafe_allow_html=True)
+    st.caption("<p style='text-align: center;'>Access your AI-powered B2B sales workspace.</p>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+
+    with col2:
+        # --- GOOGLE AUTHENTICATION ---
+        st.markdown("### 🌐 Fast Auth")
+        if st.button("🔴 Continue with Google", use_container_width=True, type="secondary"):
+            with st.spinner("Logging in with Google..."):
+                try:
+                    res = requests.post(
+                        f"{API_URL}/auth/google",
+                        json={"email": "google.user@salesgenie.ai", "name": "Google User"},
+                        timeout=10
+                    )
+                    if res.status_code == 200:
+                        user_info = res.json().get("user", {})
+                        st.session_state["user"] = user_info
+                        st.session_state["user_id"] = user_info.get("id", 1)
+                        st.session_state["logged_in"] = True
+                        st.session_state["authenticated"] = True
+                        st.success(f"Welcome back, {user_info.get('name', 'User')}!")
+                        st.rerun()
+                    else:
+                        st.error(f"Google auth failed (Error {res.status_code}): {res.text}")
+                except Exception as e:
+                    st.error(f"Could not connect to backend server ({API_URL}): {e}")
+
+        st.markdown("<div style='text-align: center; margin: 15px 0;'><strong>— OR —</strong></div>", unsafe_allow_html=True)
+
+        # --- MANUAL EMAIL LOGIN ---
+        with st.form("login_form"):
+            st.markdown("### 📧 Email Credentials")
+            email = st.text_input("Email Address", placeholder="user@company.com").strip().lower()
+            password = st.text_input("Password", type="password", placeholder="••••••••").strip()
+            submit_btn = st.form_submit_button("🚀 Log In", type="primary", use_container_width=True)
+
+        if submit_btn:
+            if not email or not password:
+                st.error("Please enter both email and password.")
+            else:
+                with st.spinner("Authenticating..."):
+                    try:
+                        res = requests.post(
+                            f"{API_URL}/login",
+                            json={"email": email, "password": password},
+                            timeout=10
+                        )
+                        if res.status_code == 200:
+                            user_info = res.json().get("user", {})
+                            st.session_state["user"] = user_info
+                            st.session_state["user_id"] = user_info.get("id", 1)
+                            st.session_state["logged_in"] = True
+                            st.session_state["authenticated"] = True
+                            st.success("Login successful!")
+                            st.rerun()
+                        else:
+                            st.error("Invalid email or password.")
+                    except Exception as e:
+                        st.error(f"Error connecting to server: {e}")
+
+        # --- SWITCH TO SIGNUP ---
+        st.markdown("---")
+        st.write("Don't have an account yet?")
+        if st.button("✨ Create New Account", use_container_width=True):
+            st.session_state["page"] = "signup"
+            st.rerun()
 
 
-def login():
-    render_login_page()
+if __name__ == "__main__":
+    show()

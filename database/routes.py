@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from database.database import get_db
 from database.models import Company, Conversation, Lead, User
 
+import requests
+
 router = APIRouter()
 
 # Initialize Google Gemini Client
@@ -30,27 +32,60 @@ def clean_json_response(text: str) -> dict:
         return {}
 
 
-# =====================================================================
-# AUTHENTICATION ENDPOINTS
-# =====================================================================
+# ==========================================
+# GOOGLE AUTHENTICATION (Login & Signup)
+# ==========================================
+@router.post("/auth/google")
+def google_auth(data: dict, db: Session = Depends(get_db)):
+    email = data.get("email", "google.user@salesgenie.ai").strip().lower()
+    name = data.get("name", "Google User").strip()
+    token = data.get("token", "").strip()
+
+    # If a real token is provided, verify with Google
+    if token:
+        try:
+            google_res = requests.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={token}", timeout=5)
+            if google_res.status_code == 200:
+                user_info = google_res.json()
+                email = user_info.get("email", email).lower()
+                name = user_info.get("name", name)
+        except Exception:
+            pass
+
+    # Check if user exists in PostgreSQL; if not, create account automatically
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = User(name=name, email=email, password="GOOGLE_OAUTH_ACCOUNT")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    return {
+        "status": "success",
+        "message": "Authenticated successfully",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email
+        }
+    }
 
 
+# ==========================================
+# MANUAL SIGNUP
+# ==========================================
 @router.post("/signup")
 def signup(data: dict, db: Session = Depends(get_db)):
     email = data.get("email", "").strip().lower()
     password = data.get("password", "").strip()
     name = data.get("name", "").strip()
 
-    if not email or not password:
-        raise HTTPException(
-            status_code=400, detail="Email and password are required."
-        )
+    if not email or not password or not name:
+        raise HTTPException(status_code=400, detail="Name, Email, and Password are required.")
 
     existing_user = db.query(User).filter(User.email == email).first()
     if existing_user:
-        raise HTTPException(
-            status_code=400, detail="User with this email already exists."
-        )
+        raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
     new_user = User(name=name, email=email, password=password)
     db.add(new_user)
@@ -58,29 +93,28 @@ def signup(data: dict, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     return {
+        "status": "success",
         "message": "User created successfully",
-        "user": {"id": new_user.id, "name": new_user.name, "email": new_user.email},
+        "user": {"id": new_user.id, "name": new_user.name, "email": new_user.email}
     }
 
 
+# ==========================================
+# MANUAL LOGIN
+# ==========================================
 @router.post("/login")
 def login(data: dict, db: Session = Depends(get_db)):
     email = data.get("email", "").strip().lower()
     password = data.get("password", "").strip()
 
-    user = (
-        db.query(User)
-        .filter(User.email == email, User.password == password)
-        .first()
-    )
+    user = db.query(User).filter(User.email == email, User.password == password).first()
     if not user:
-        raise HTTPException(
-            status_code=401, detail="Invalid email or password."
-        )
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     return {
+        "status": "success",
         "message": "Login successful",
-        "user": {"id": user.id, "name": user.name, "email": user.email},
+        "user": {"id": user.id, "name": user.name, "email": user.email}
     }
 
 
@@ -88,11 +122,9 @@ def login(data: dict, db: Session = Depends(get_db)):
 # LEAD MANAGEMENT ENDPOINTS
 # =====================================================================
 
-
-# --- GET ALL LEADS ---
 @router.get("/leads")
-def get_leads(db: Session = Depends(get_db)):
-    leads = db.query(Lead).all()
+def get_leads(user_id: int = 1, db: Session = Depends(get_db)):
+    leads = db.query(Lead).filter(Lead.user_id == user_id).all()
     result = []
     for lead in leads:
         result.append(
@@ -114,7 +146,6 @@ def get_leads(db: Session = Depends(get_db)):
     return result
 
 
-# --- CREATE SINGLE LEAD ---
 @router.post("/leads")
 def create_lead(data: dict, user_id: int = 1, db: Session = Depends(get_db)):
     name = data.get("name") or data.get("contact_name")
@@ -122,9 +153,7 @@ def create_lead(data: dict, user_id: int = 1, db: Session = Depends(get_db)):
     email = data.get("email")
 
     if not name or not company or not email:
-        raise HTTPException(
-            status_code=400, detail="Name, Company, and Email are required."
-        )
+        raise HTTPException(status_code=400, detail="Name, Company, and Email are required.")
 
     new_lead = Lead(
         user_id=user_id,
@@ -144,14 +173,11 @@ def create_lead(data: dict, user_id: int = 1, db: Session = Depends(get_db)):
     return {"message": "Lead created successfully", "lead_id": new_lead.id}
 
 
-# --- UPDATE LEAD ---
 @router.put("/leads/{lead_id}")
 def update_lead(lead_id: int, data: dict, db: Session = Depends(get_db)):
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
-        raise HTTPException(
-            status_code=404, detail=f"Lead with ID #{lead_id} not found."
-        )
+        raise HTTPException(status_code=404, detail=f"Lead with ID #{lead_id} not found.")
 
     try:
         if "name" in data and data["name"]:
@@ -172,83 +198,51 @@ def update_lead(lead_id: int, data: dict, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(lead)
         return {"message": f"Lead {lead_id} updated successfully", "lead": data}
-
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update lead: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to update lead: {str(e)}")
 
 
-# --- DELETE LEAD ---
 @router.delete("/leads/{lead_id}")
 def delete_lead(lead_id: int, db: Session = Depends(get_db)):
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
-        raise HTTPException(
-            status_code=404, detail=f"Lead with ID #{lead_id} not found."
-        )
+        raise HTTPException(status_code=404, detail=f"Lead with ID #{lead_id} not found.")
 
     try:
-        # Delete related conversation records first to prevent foreign key errors
-        db.execute(
-            text("DELETE FROM conversations WHERE lead_id = :lead_id"),
-            {"lead_id": lead_id},
-        )
-
+        db.execute(text("DELETE FROM conversations WHERE lead_id = :lead_id"), {"lead_id": lead_id})
         db.delete(lead)
         db.commit()
-
         return {"message": f"Lead #{lead_id} deleted successfully"}
-
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Database deletion error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Database deletion error: {str(e)}")
 
 
-# --- BULK CSV IMPORT ---
 @router.post("/leads/bulk")
-def create_leads_bulk(
-    leads: List[dict], user_id: int = 1, db: Session = Depends(get_db)
-):
+def create_leads_bulk(leads: List[dict], user_id: int = 1, db: Session = Depends(get_db)):
     try:
         created_count = 0
-
         existing_emails = {
-            l[0].lower()
-            for l in db.query(Lead.email).filter(Lead.user_id == user_id).all()
-            if l[0]
+            l[0].lower() for l in db.query(Lead.email).filter(Lead.user_id == user_id).all() if l[0]
         }
 
         for lead in leads:
-
             def clean_str(val, default=""):
                 if val is None or (isinstance(val, float) and math.isnan(val)):
                     return default
                 return str(val).strip()
 
-            company_val = clean_str(
-                lead.get("company") or lead.get("company_name"),
-                "Unknown Company",
-            )
-            name_val = clean_str(
-                lead.get("name") or lead.get("contact_name"), "Unknown Contact"
-            )
-            email_val = clean_str(
-                lead.get("email"),
-                f"contact@{company_val.lower().replace(' ', '')}.com",
-            ).lower()
+            company_val = clean_str(lead.get("company") or lead.get("company_name"), "Unknown Company")
+            name_val = clean_str(lead.get("name") or lead.get("contact_name"), "Unknown Contact")
+            email_val = clean_str(lead.get("email"), f"contact@{company_val.lower().replace(' ', '')}.com").lower()
 
             if email_val in existing_emails:
                 continue
 
             raw_rev = lead.get("revenue")
             rev_val = "N/A"
-            if raw_rev is not None and not (
-                isinstance(raw_rev, float) and math.isnan(raw_rev)
-            ):
+            if raw_rev is not None and not (isinstance(raw_rev, float) and math.isnan(raw_rev)):
                 rev_val = str(raw_rev).strip()
 
             db_lead = Lead(
@@ -269,31 +263,164 @@ def create_leads_bulk(
 
         db.commit()
         return {"message": f"Successfully imported {created_count} leads!"}
-
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Database import error: {str(e)}"
+        raise HTTPException(status_code=500, detail=f"Database import error: {str(e)}")
+
+
+# =====================================================================
+# AI OUTRACH GENERATOR ENDPOINT (NEW)
+# =====================================================================
+
+@router.post("/generate-outreach")
+def generate_outreach(data: dict, user_id: int = 1, db: Session = Depends(get_db)):
+    name = data.get("name", "Prospect").strip()
+    company = data.get("company", "Target Company").strip()
+    industry = data.get("industry", "General Industry").strip()
+    channel = data.get("channel", "Cold Email").strip()
+    tone = data.get("tone", "Professional & Persuasive").strip()
+    value_prop = data.get("value_prop", "").strip()
+
+    prompt = f"""
+You are an expert sales copywriter. Write a personalized {channel} for a prospective buyer.
+
+Target Details:
+- Contact Name: {name}
+- Company Name: {company}
+- Industry: {industry}
+- Communication Tone: {tone}
+- Value Proposition / Offer: {value_prop if value_prop else 'AI-driven automation that reduces sales cycle times'}
+
+Return ONLY valid JSON in this exact format:
+{{
+  "subject": "Compelling subject line or headline",
+  "body": "Personalized message body tailored to the target and tone..."
+}}
+"""
+
+    if not client:
+        return {
+            "subject": f"Quick question regarding {company}'s growth",
+            "body": f"Hi {name},\n\nI noticed {company}'s impressive work in {industry}. {value_prop if value_prop else 'We specialize in AI solutions to streamline outreach.'}\n\nWould you be open to a 10-minute chat this Thursday?\n\nBest regards,\nSalesGenie Team"
+        }
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", contents=prompt
         )
+        ai_res = clean_json_response(response.text)
+        if "subject" not in ai_res or "body" not in ai_res:
+            raise ValueError("Invalid format")
+        return ai_res
+    except Exception:
+        return {
+            "subject": f"Exploring growth opportunities for {company}",
+            "body": f"Hi {name},\n\nHope this finds you well. Given your focus in {industry}, I wanted to reach out regarding how {company} can benefit from AI outreach automation.\n\n{value_prop if value_prop else 'We help sales teams scale messaging without sacrificing personalization.'}\n\nLet me know if you have 10 minutes for a brief call this week.\n\nBest regards,\nSalesGenie Team"
+        }
+
+
+# =====================================================================
+# CONVERSATION INTELLIGENCE ENDPOINTS
+# =====================================================================
+
+@router.get("/conversations")
+def get_conversations(lead_id: int, user_id: int = 1, db: Session = Depends(get_db)):
+    conversations = (
+        db.query(Conversation)
+        .filter(Conversation.lead_id == lead_id, Conversation.user_id == user_id)
+        .all()
+    )
+    if not conversations:
+        return []
+
+    return [
+        {
+            "id": c.id,
+            "lead_id": c.lead_id,
+            "interaction_type": getattr(c, "interaction_type", "Call"),
+            "transcript": getattr(c, "transcript", None) or getattr(c, "message", ""),
+            "summary": getattr(c, "summary", ""),
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        }
+        for c in conversations
+    ]
+
+
+@router.post("/analyze-conversation")
+def analyze_conversation(data: dict, user_id: int = 1, db: Session = Depends(get_db)):
+    lead_id = data.get("lead_id")
+    transcript = data.get("transcript", "").strip()
+    interaction_type = data.get("interaction_type", "Call")
+
+    if not lead_id or not transcript:
+        raise HTTPException(status_code=400, detail="lead_id and transcript are required.")
+
+    if not client:
+        ai_data = {
+            "summary": "Meeting transcript processed and logged.",
+            "key_points": ["Reviewed prospect requirements"],
+            "action_items": ["Follow up with custom proposal"],
+            "recommended_stage": "Qualified"
+        }
+    else:
+        prompt = f"""
+Analyze the following sales interaction ({interaction_type}):
+"{transcript}"
+
+Return ONLY valid JSON in this exact structure:
+{{
+  "summary": "Key discussion summary...",
+  "key_points": ["Point 1", "Point 2"],
+  "action_items": ["Action 1", "Action 2"],
+  "recommended_stage": "Qualified"
+}}
+"""
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash", contents=prompt
+            )
+            ai_data = clean_json_response(response.text)
+        except Exception:
+            ai_data = {
+                "summary": "Transcript analyzed successfully.",
+                "key_points": ["Discussed feature requirements"],
+                "action_items": ["Send technical proposal"],
+                "recommended_stage": "Proposal Sent"
+            }
+
+    new_conv = Conversation(
+        user_id=user_id,
+        lead_id=lead_id,
+        interaction_type=interaction_type,
+        transcript=transcript,
+        summary=ai_data.get("summary", ""),
+        sender="AI",
+        message=ai_data.get("summary", transcript[:255])
+    )
+
+    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.user_id == user_id).first()
+    if lead and "recommended_stage" in ai_data:
+        lead.status = ai_data["recommended_stage"]
+
+    db.add(new_conv)
+    db.commit()
+    db.refresh(new_conv)
+
+    return {"message": "Conversation analyzed and saved successfully", "data": ai_data}
 
 
 # =====================================================================
 # COMPANY INTELLIGENCE (GEMINI AI)
 # =====================================================================
 
-
 @router.post("/analyze-company")
-def analyze_company(
-    data: dict, user_id: int = 1, db: Session = Depends(get_db)
-):
+def analyze_company(data: dict, user_id: int = 1, db: Session = Depends(get_db)):
     company_name = data.get("company", "").strip()
     website = data.get("website", "").strip() or "Not Provided"
     industry = data.get("industry", "").strip() or "General Business"
 
     if not company_name or len(company_name) < 2:
-        raise HTTPException(
-            status_code=400, detail="A valid Company Name is required."
-        )
+        raise HTTPException(status_code=400, detail="A valid Company Name is required.")
 
     if not client:
         result = {
@@ -329,7 +456,7 @@ Return ONLY valid JSON in this exact structure:
                 model="gemini-2.5-flash", contents=prompt
             )
             result = clean_json_response(response.text)
-        except Exception as e:
+        except Exception:
             result = {
                 "company": company_name,
                 "industry": industry,
@@ -342,9 +469,7 @@ Return ONLY valid JSON in this exact structure:
 
     existing = (
         db.query(Company)
-        .filter(
-            Company.company_name == company_name, Company.user_id == user_id
-        )
+        .filter(Company.company_name == company_name, Company.user_id == user_id)
         .first()
     )
     if not existing:
@@ -365,10 +490,9 @@ Return ONLY valid JSON in this exact structure:
 # DASHBOARD METRICS
 # =====================================================================
 
-
 @router.get("/dashboard")
-def get_dashboard_data(db: Session = Depends(get_db)):
-    query_leads = db.query(Lead)
+def get_dashboard_data(user_id: int = 1, db: Session = Depends(get_db)):
+    query_leads = db.query(Lead).filter(Lead.user_id == user_id)
     total_leads = query_leads.count()
 
     high_priority_count = query_leads.filter(func.lower(Lead.priority) == "high").count()
@@ -383,9 +507,67 @@ def get_dashboard_data(db: Session = Depends(get_db)):
         round((qualified_count / total_leads) * 100, 1) if total_leads > 0 else 0.0
     )
 
+    total_companies = db.query(Company).filter(Company.user_id == user_id).count()
+
     return {
         "total_leads": total_leads,
         "high_priority_leads": high_priority_count,
         "qualified_leads": qualified_count,
         "conversion_rate": conversion_rate,
+        "total_companies": total_companies
     }
+
+# =====================================================================
+# COMPETITOR BATTLE CARDS & OBJECTION HANDLER
+# =====================================================================
+
+@router.post("/competitor-battlecard")
+def generate_battlecard(data: dict, user_id: int = 1, db: Session = Depends(get_db)):
+    competitor = data.get("competitor", "").strip()
+    our_product = data.get("our_product", "SalesGenie AI Platform").strip()
+
+    if not competitor:
+        raise HTTPException(status_code=400, detail="Competitor name is required.")
+
+    prompt = f"""
+    Generates a sales battle card against competitor: '{competitor}'.
+    Our Product Category: {our_product}
+
+    Return ONLY valid JSON in this exact structure:
+    {{
+      "competitor": "{competitor}",
+      "top_weaknesses": ["Weakness 1", "Weakness 2"],
+      "our_key_advantages": ["Advantage 1", "Advantage 2"],
+      "objection_scripts": {{
+        "Their pricing is lower": "How to respond effectively...",
+        "They have been in the market longer": "How to handle brand reputation..."
+      }}
+    }}
+    """
+
+    if not client:
+        return {
+            "competitor": competitor,
+            "top_weaknesses": ["Legacy architecture", "Slower setup time"],
+            "our_key_advantages": ["Real-time Gemini AI integration", "Unified workspace"],
+            "objection_scripts": {
+                "Pricing objection": "Highlight ROI velocity and automation time saved.",
+                "Feature comparison": "Emphasize our native conversation intelligence."
+            }
+        }
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", contents=prompt
+        )
+        return clean_json_response(response.text)
+    except Exception:
+        return {
+            "competitor": competitor,
+            "top_weaknesses": ["Complex onboarding", "High maintenance costs"],
+            "our_key_advantages": ["Instant setup", "AI-driven lead scoring"],
+            "objection_scripts": {
+                "Pricing objection": "Focus on quick time-to-value.",
+                "Migration risk": "Demonstrate seamless CSV import."
+            }
+        }
