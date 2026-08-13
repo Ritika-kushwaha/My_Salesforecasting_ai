@@ -34,7 +34,7 @@ def show():
 
     user_id = st.session_state.get("user_id", 1)
 
-    # Load leads into session state if not present
+    # Refresh leads state
     if "leads" not in st.session_state or st.session_state.get("force_refresh_leads"):
         try:
             res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=5)
@@ -48,8 +48,12 @@ def show():
             st.session_state["leads"] = []
         st.session_state["force_refresh_leads"] = False
 
-    # Lead Creation Section
-    with st.expander("➕ Add New Lead", expanded=False):
+    # -------------------------------------------------------------
+    # 1. ADD / BULK IMPORT LEADS SECTION
+    # -------------------------------------------------------------
+    tab1, tab2 = st.tabs(["➕ Add Single Lead", "📁 Bulk Import (CSV)"])
+
+    with tab1:
         with st.form("add_lead_form"):
             col1, col2 = st.columns(2)
             with col1:
@@ -93,39 +97,135 @@ def show():
                     except Exception as ex:
                         st.error(f"Connection error: {ex}")
 
-    # Display Leads Table
+    with tab2:
+        st.caption("Upload a CSV file with columns: `name`, `company`, `email`, `phone`, `industry`, `revenue`, `priority`, `status`")
+        uploaded_file = st.file_uploader("Choose CSV File", type=["csv"])
+        if uploaded_file is not None:
+            try:
+                csv_df = pd.read_csv(uploaded_file)
+                st.write("Preview of leads to import:")
+                st.dataframe(csv_df.head(), use_container_width=True)
+
+                if st.button("🚀 Upload & Import All Leads", type="primary"):
+                    bulk_payload = csv_df.to_dict(orient="records")
+                    res = requests.post(
+                        f"{API_URL}/leads/bulk",
+                        params={"user_id": user_id},
+                        json=bulk_payload,
+                        timeout=10,
+                    )
+                    if res.status_code == 200:
+                        st.success(res.json().get("message", "Bulk leads imported successfully!"))
+                        st.session_state["force_refresh_leads"] = True
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to import leads: {res.text}")
+            except Exception as e:
+                st.error(f"Error processing CSV file: {e}")
+
+    st.markdown("---")
+
+    # -------------------------------------------------------------
+    # 2. DISPLAY LEADS TABLE
+    # -------------------------------------------------------------
     st.subheader("Your Leads")
     if not st.session_state.get("leads"):
-        st.info("No leads found. Click 'Add New Lead' above to get started!")
+        st.info("No leads found. Add your first lead above!")
     else:
         df = pd.DataFrame(st.session_state["leads"])
 
-        # Format revenue column for better display
+        # Format revenue
         if "revenue" in df.columns:
             df["revenue"] = df["revenue"].apply(
                 lambda x: f"${float(x):,.2f}" if str(x).replace(".", "", 1).isdigit() else str(x)
             )
 
-        # -------------------------------------------------------------
-        # 1. ADD ROW COUNTER FOR CLEAN DISPLAY (#1, #2, #3...)
-        # -------------------------------------------------------------
+        # Add sequential UI counter
         df["#"] = range(1, len(df) + 1)
-
-        # Filter out backend primary key IDs and place '#' at the front
         cols = ["#"] + [c for c in df.columns if c not in ["#", "id", "user_id"]]
 
-        # -------------------------------------------------------------
-        # 2. RENDER DATAFRAME WITH HIDDEN STREAMLIT INDEX
-        # -------------------------------------------------------------
         st.dataframe(df[cols], use_container_width=True, hide_index=True)
 
-        # Export Brief Section
-        st.subheader("📄 Export Lead Brief (PDF)")
-        lead_options = {f"{l.get('name', 'N/A')} ({l.get('company', 'N/A')})": l for l in st.session_state["leads"]}
-        selected_lead_label = st.selectbox("Select a Lead to Export", list(lead_options.keys()))
+        # -------------------------------------------------------------
+        # 3. EDIT & DELETE LEAD SECTION
+        # -------------------------------------------------------------
+        st.markdown("---")
+        st.subheader("⚡ Manage Selected Lead")
 
-        if selected_lead_label:
-            selected_lead = lead_options[selected_lead_label]
+        lead_options = {
+            f"#{idx + 1} - {l.get('name', 'N/A')} ({l.get('company', 'N/A')})": l
+            for idx, l in enumerate(st.session_state["leads"])
+        }
+        selected_label = st.selectbox("Select Lead to Manage", list(lead_options.keys()))
+
+        if selected_label:
+            selected_lead = lead_options[selected_label]
+            lead_db_id = selected_lead.get("id")
+
+            action_col1, action_col2 = st.columns([2, 1])
+
+            with action_col1:
+                with st.expander("✏️ Edit Lead Details", expanded=False):
+                    with st.form("edit_lead_form"):
+                        e_name = st.text_input("Name", value=selected_lead.get("name", ""))
+                        e_company = st.text_input("Company", value=selected_lead.get("company", ""))
+                        e_email = st.text_input("Email", value=selected_lead.get("email", ""))
+                        e_phone = st.text_input("Phone", value=selected_lead.get("phone", ""))
+                        e_industry = st.text_input("Industry", value=selected_lead.get("industry", "General"))
+                        
+                        priorities = ["Low", "Medium", "High"]
+                        cur_priority = selected_lead.get("priority", "Medium")
+                        p_idx = priorities.index(cur_priority) if cur_priority in priorities else 1
+                        e_priority = st.selectbox("Priority", priorities, index=p_idx)
+
+                        statuses = ["New", "Contacted", "Qualified", "Proposal Sent", "Closed Won", "Closed Lost"]
+                        cur_status = selected_lead.get("status", "New")
+                        s_idx = statuses.index(cur_status) if cur_status in statuses else 0
+                        e_status = st.selectbox("Status", statuses, index=s_idx)
+
+                        save_changes = st.form_submit_button("💾 Save Changes", type="primary")
+
+                        if save_changes:
+                            update_payload = {
+                                "name": e_name,
+                                "company": e_company,
+                                "email": e_email,
+                                "phone": e_phone,
+                                "industry": e_industry,
+                                "priority": e_priority,
+                                "status": e_status,
+                            }
+                            try:
+                                res = requests.put(f"{API_URL}/leads/{lead_db_id}", json=update_payload, timeout=5)
+                                if res.status_code == 200:
+                                    st.success("Lead updated successfully!")
+                                    st.session_state["force_refresh_leads"] = True
+                                    st.rerun()
+                                else:
+                                    st.error(f"Update failed: {res.text}")
+                            except Exception as ex:
+                                st.error(f"Error connecting to backend: {ex}")
+
+            with action_col2:
+                st.write("")
+                st.write("")
+                if st.button("🗑️ Delete Lead", type="secondary", use_container_width=True):
+                    try:
+                        res = requests.delete(f"{API_URL}/leads/{lead_db_id}", timeout=5)
+                        if res.status_code == 200:
+                            st.success("Lead deleted successfully!")
+                            st.session_state["force_refresh_leads"] = True
+                            st.rerun()
+                        else:
+                            st.error(f"Delete failed: {res.text}")
+                    except Exception as ex:
+                        st.error(f"Error connecting to backend: {ex}")
+
+            # -------------------------------------------------------------
+            # 4. EXPORT BRIEF (PDF)
+            # -------------------------------------------------------------
+            st.markdown("---")
+            st.subheader("📄 Export Brief")
             pdf_bytes = generate_pdf(selected_lead)
             st.download_button(
                 label="📥 Download PDF Brief",
