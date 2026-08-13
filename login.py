@@ -119,7 +119,7 @@ def show():
                         res = requests.post(
                             f"{API_URL}/login",
                             json={"email": email, "password": password},
-                            timeout=10
+                            timeout=25
                         )
                         if res.status_code == 200:
                             user_data = res.json().get("user", {})

@@ -5,19 +5,26 @@ import traceback
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from google import genai
+from pydantic import BaseModel
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
+import requests
 
 from database.database import get_db
 from database.models import Company, Conversation, Lead, User
 
-import requests
-
 router = APIRouter()
 
-# Initialize Google Gemini Client
+# -------------------------------------------------------------------
+# ENVIRONMENT & CONFIGURATION
+# -------------------------------------------------------------------
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+# Google OAuth Credentials for Backend Verification
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8501/")
 
 
 def clean_json_response(text: str) -> dict:
@@ -35,39 +42,81 @@ def clean_json_response(text: str) -> dict:
 # ==========================================
 # GOOGLE AUTHENTICATION (Login & Signup)
 # ==========================================
+class GoogleAuthRequest(BaseModel):
+    token: str | None = None
+    email: str | None = None
+    name: str | None = None
+
+
 @router.post("/auth/google")
-def google_auth(data: dict, db: Session = Depends(get_db)):
-    email = data.get("email", "google.user@salesgenie.ai").strip().lower()
-    name = data.get("name", "Google User").strip()
-    token = data.get("token", "").strip()
+def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
+    user_email = None
+    user_name = None
 
-    # If a real token is provided, verify with Google
-    if token:
+    # 1. Exchange OAuth authorization code for Google user details
+    if data.token:
         try:
-            google_res = requests.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={token}", timeout=5)
-            if google_res.status_code == 200:
-                user_info = google_res.json()
-                email = user_info.get("email", email).lower()
-                name = user_info.get("name", name)
-        except Exception:
-            pass
+            token_res = requests.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": data.token,
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "redirect_uri": REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                },
+                timeout=10,
+            )
+            token_json = token_res.json()
+            access_token = token_json.get("access_token")
 
-    # Check if user exists in PostgreSQL; if not, create account automatically
-    user = db.query(User).filter(User.email == email).first()
+            if not access_token:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Google OAuth Error: {token_json.get('error_description', 'Invalid authorization token')}"
+                )
+
+            # Fetch User Profile from Google
+            user_info_res = requests.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10,
+            )
+            user_info = user_info_res.json()
+            user_email = user_info.get("email")
+            user_name = user_info.get("name") or (user_email.split("@")[0] if user_email else "Google User")
+
+        except requests.exceptions.Timeout:
+            raise HTTPException(status_code=504, detail="Google OAuth server request timed out.")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to verify Google token: {e}")
+
+    # Fallback if direct payload is sent
+    elif data.email:
+        user_email = data.email
+        user_name = data.name or "Google User"
+
+    if not user_email:
+        raise HTTPException(status_code=400, detail="Could not retrieve email from Google account.")
+
+    # 2. Query or Create User dynamically in PostgreSQL
+    user = db.query(User).filter(User.email == user_email).first()
+
     if not user:
-        user = User(name=name, email=email, password="GOOGLE_OAUTH_ACCOUNT")
+        # Pass a placeholder password so NOT NULL constraint is satisfied
+        user = User(email=user_email, name=user_name, password="oauth_google_account")
         db.add(user)
         db.commit()
         db.refresh(user)
 
+    # 3. Return Unique User Payload
     return {
         "status": "success",
-        "message": "Authenticated successfully",
         "user": {
             "id": user.id,
+            "email": user.email,
             "name": user.name,
-            "email": user.email
-        }
+        },
     }
 
 
@@ -109,8 +158,11 @@ def login(data: dict, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.email == email, User.password == password).first()
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
-
+        # Pass a placeholder password so NOT NULL constraint is satisfied
+        user = User(email=user_email, name=user_name, password="oauth_google_account")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     return {
         "status": "success",
         "message": "Login successful",
@@ -269,7 +321,7 @@ def create_leads_bulk(leads: List[dict], user_id: int = 1, db: Session = Depends
 
 
 # =====================================================================
-# AI OUTRACH GENERATOR ENDPOINT (NEW)
+# AI OUTREACH GENERATOR ENDPOINT
 # =====================================================================
 
 @router.post("/generate-outreach")
@@ -516,6 +568,7 @@ def get_dashboard_data(user_id: int = 1, db: Session = Depends(get_db)):
         "conversion_rate": conversion_rate,
         "total_companies": total_companies
     }
+
 
 # =====================================================================
 # COMPETITOR BATTLE CARDS & OBJECTION HANDLER
