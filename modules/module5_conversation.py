@@ -1,136 +1,183 @@
-import streamlit as st
-import requests
 import os
-from datetime import datetime
+import requests
+import streamlit as st
 
 API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
+
+def apply_app_theme():
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+        html, body, [class*="css"] {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .panel-box {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+            padding: 22px;
+            backdrop-filter: blur(14px);
+        }
+        .stButton>button {
+            border-radius: 12px;
+            font-weight: 700;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def get_current_user_id():
+    user = st.session_state.get("user")
+    if isinstance(user, dict) and user.get("id"):
+        return user["id"]
+    return st.session_state.get("user_id", 1)
+
+
 def show():
-    st.title("💬 Module 5: Conversation Intelligence & CRM")
-    st.caption("Analyze sales calls, extract action items, and sync interactions with PostgreSQL.")
+    apply_app_theme()
 
-    # ✅ SAFE CODE (Handles None values, empty dicts, or missing keys)
-    user_data = st.session_state.get("user") or {}
-    user_id = user_data.get("id", 1) if isinstance(user_data, dict) else st.session_state.get("user_id", 1)
+    st.markdown(
+        """
+        <div style="margin-bottom: 22px;">
+            <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 9999px; padding: 4px 12px; color: #818CF8; font-size: 0.78rem; font-weight: 700; margin-bottom: 8px;">
+                🎙️ MEETING INTELLIGENCE
+            </div>
+            <h1 style="font-size: 2.1rem; font-weight: 800; margin: 0; letter-spacing: -0.03em;">Conversation Intelligence & Interaction Feed</h1>
+            <p style="color: #94A3B8; font-size: 0.92rem; margin-top: 4px;">Analyze sales call transcripts, extract key action items, and sync CRM pipeline stages automatically.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # 2. Fetch Leads from Backend API
+    user_id = get_current_user_id()
+
     leads_list = []
     try:
-        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=10)
+        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=8)
         if res.status_code == 200:
             leads_list = res.json()
-    except Exception as e:
-        st.warning(f"Unable to reach backend database at {API_URL}. Ensure Uvicorn is running.")
+    except Exception:
+        pass
 
     if not leads_list:
-        st.info("💡 No leads found in your account database. Please add leads in 'Lead Management' first.")
+        st.info("💡 No leads registered. Add prospects in **Module 1 (Lead Pipeline)** to analyze conversations!")
         return
 
-    # Formulate Lead Selector Map
     lead_options = {}
-    for lead in leads_list:
-        l_id = lead.get("id") or lead.get("lead_id")
-        l_name = lead.get("name") or lead.get("contact_name", "Unknown Contact")
-        l_comp = lead.get("company") or lead.get("company_name", "Unknown Company")
-        lead_options[f"{l_name} ({l_comp})"] = l_id
+    for idx, lead in enumerate(leads_list, start=1):
+        lead_options[f"#{idx} - {lead.get('name')} ({lead.get('company')})"] = lead.get("id")
 
-    # UI Layout: Column Selection
-    col_select, col_info = st.columns([2, 1])
-    with col_select:
-        selected_lead_label = st.selectbox("🎯 Select Lead / Prospect for Meeting Analysis:", list(lead_options.keys()))
-        selected_lead_id = lead_options[selected_lead_label]
+    c_select, c_card = st.columns([1.2, 1], gap="large")
+    with c_select:
+        selected_label = st.selectbox("🎯 Target Prospect for Conversation Analysis:", list(lead_options.keys()))
+        selected_lead_id = lead_options[selected_label]
 
-    # Find full selected lead dict
-    selected_lead = next((l for l in leads_list if (l.get("id") == selected_lead_id or l.get("lead_id") == selected_lead_id)), {})
+    selected_lead = next((l for l in leads_list if l.get("id") == selected_lead_id), {})
 
-    with col_info:
-        st.markdown(f"**Industry:** `{selected_lead.get('industry', 'N/A')}`")
-        st.markdown(f"**Current Status:** `{selected_lead.get('status', 'New')}`")
-        st.markdown(f"**Priority:** `{selected_lead.get('priority', 'Medium')}`")
+    with c_card:
+        prio_color = "#EF4444" if selected_lead.get("priority") == "High" else "#F59E0B"
+        st.markdown(f"""
+        <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 14px 18px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                <span><b>Industry:</b> {selected_lead.get('industry', 'General')}</span>
+                <span><b>Stage:</b> <code style="color: #6366F1;">{selected_lead.get('status', 'New')}</code></span>
+                <span><b>Priority:</b> <span style="color: {prio_color}; font-weight: 700;">{selected_lead.get('priority', 'Medium')}</span></span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
 
-    # Tabs for Input & Recent History
-    tab_analyze, tab_history = st.tabs(["🤖 AI Transcript Summarizer", "📜 Interaction History"])
+    tab_analyze, tab_history = st.tabs(["🤖 AI Transcript Analyzer", "📜 Chronological Notes Timeline"])
 
     with tab_analyze:
-        st.subheader("🎙️ Input Call Transcript or Meeting Notes")
+        col_type, _ = st.columns([1, 2])
+        with col_type:
+            call_type = st.selectbox("Call Type", ["Discovery Call", "Demo Meeting", "Technical Evaluation", "Negotiation & Closing", "Follow-up Call"])
+
         transcript_text = st.text_area(
-            "Paste Meeting Notes, Email Threads, or Call Transcripts:",
+            "Paste Call Transcript or Meeting Notes:",
             height=180,
-            placeholder="e.g., Met with VP of Technology. They expressed strong interest in our AI automation features but requested custom enterprise SLAs. Target closing Q3..."
+            placeholder="e.g. Sales Rep: Thanks for meeting today. Prospect: We need automated lead scoring and CRM sync..."
         )
 
-        call_type = st.selectbox("Interaction Type:", ["Discovery Call", "Demo Meeting", "Follow-up Email", "Closing Pitch"])
-
-        if st.button("🚀 Analyze & Extract Intelligence", type="primary"):
+        if st.button("⚡ Run AI Analysis & Advance Pipeline", type="primary", use_container_width=True):
             if not transcript_text.strip():
-                st.error("Please enter transcript text before analyzing.")
+                st.error("Please enter a meeting transcript.")
             else:
-                with st.spinner("Processing transcript with Gemini AI..."):
-                    payload = {
-                        "lead_id": selected_lead_id,
-                        "transcript": transcript_text,
-                        "interaction_type": call_type
-                    }
+                with st.spinner("Analyzing conversation and updating CRM..."):
+                    payload = {"lead_id": selected_lead_id, "transcript": transcript_text, "interaction_type": call_type}
                     try:
-                        # API call to process conversation and save to database
-                        response = requests.post(
-                            f"{API_URL}/analyze-conversation",
-                            json=payload,
-                            params={"user_id": user_id},
-                            timeout=25
-                        )
-                        if response.status_code == 200:
-                            data = response.json().get("data", {})
-                            st.success("✅ Interaction analyzed and saved to PostgreSQL successfully!")
+                        res = requests.post(f"{API_URL}/analyze-conversation", json=payload, params={"user_id": user_id}, timeout=30)
+                        if res.status_code == 200:
+                            ai_res = res.json().get("data", {})
+                            st.toast("Meeting analyzed and stage synced!", icon="🎉")
 
-                            # Display Results Cards
-                            res_col1, res_col2 = st.columns(2)
-                            with res_col1:
-                                st.markdown("### 📋 Executive Summary")
-                                st.info(data.get("summary", "Summary compiled from call notes."))
+                            st.markdown(f"""
+                            <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 16px; padding: 20px; margin: 15px 0;">
+                                <h4 style="margin: 0 0 8px 0; color: #6366F1;">📋 Executive Meeting Summary</h4>
+                                <p style="margin: 0; font-size: 0.92rem; line-height: 1.6;">{ai_res.get('summary', 'Logged.')}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                                st.markdown("### 🎯 Key Discussion Points")
-                                points = data.get("key_points", ["Customer requirements discussed.", "Timeline evaluated."])
-                                for pt in points:
-                                    st.write(f"• {pt}")
-
-                            with res_col2:
-                                st.markdown("### ⚡ Next Action Items")
-                                actions = data.get("action_items", ["Follow up by end of week."])
-                                for act in actions:
-                                    st.write(f"✅ {act}")
-
-                                st.markdown("### 📈 Stage Recommendation")
-                                st.success(f"Recommended Lead Status: **{data.get('recommended_stage', 'Qualified')}**")
+                            r1, r2 = st.columns(2, gap="medium")
+                            with r1:
+                                st.markdown("#### 🎯 Key Discussion Points")
+                                for pt in ai_res.get("key_points", ["Discussed technical requirements.", "Evaluated budget and timeline."]):
+                                    st.markdown(f"• {pt}")
+                            with r2:
+                                st.markdown("#### ⚡ Recommended Next Actions")
+                                for act in ai_res.get("action_items", ["Send customized proposal.", "Schedule follow-up demo."]):
+                                    st.markdown(f"✅ **{act}**")
                         else:
-                            st.error(f"Backend returned error {response.status_code}: {response.text}")
+                            st.error(f"Error {res.status_code}: {res.text}")
                     except Exception as ex:
-                        st.error(f"Error connecting to server: {ex}")
+                        st.error(f"Error: {ex}")
 
     with tab_history:
-        st.subheader(f"📜 Logged Interactions for {selected_lead_label}")
+        st.markdown(f"### 📜 Interaction Timeline for {selected_label}")
+        with st.expander("➕ Log a Quick Meeting Note", expanded=False):
+            with st.form("quick_note_feed", clear_on_submit=True):
+                n_type = st.selectbox("Type", ["Quick Note", "Phone Call", "Follow-up Email", "Demo Meeting"])
+                n_content = st.text_area("Note Content", placeholder="e.g. Followed up on proposal. Prospect requested 5% discount for annual contract.")
+                if st.form_submit_button("📌 Save to Timeline", type="primary"):
+                    if n_content.strip():
+                        requests.post(f"{API_URL}/analyze-conversation", json={"lead_id": selected_lead_id, "transcript": n_content, "interaction_type": n_type}, params={"user_id": user_id}, timeout=15)
+                        st.toast("Note saved!", icon="✅")
+                        st.rerun()
+
         try:
-            hist_res = requests.get(
-                f"{API_URL}/conversations",
-                params={"lead_id": selected_lead_id, "user_id": user_id},
-                timeout=10
-            )
+            hist_res = requests.get(f"{API_URL}/conversations", params={"lead_id": selected_lead_id, "user_id": user_id}, timeout=8)
             if hist_res.status_code == 200:
                 history_data = hist_res.json()
                 if history_data:
-                    for item in history_data:
-                        with st.expander(f"🗓️ {item.get('created_at', 'Recent')} - {item.get('interaction_type', 'Call')}"):
-                            st.write(f"**Notes/Transcript:** {item.get('transcript', '')}")
-                            if item.get('summary'):
-                                st.info(f"**AI Summary:** {item.get('summary')}")
+                    for item in reversed(history_data):
+                        created = item.get('created_at', 'Recent')
+                        itype = item.get('interaction_type', 'Call')
+                        transcript_full = item.get('transcript', '')
+                        summary_full = item.get('summary')
+
+                        st.markdown(f"""
+                        <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 18px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 700; color: #6366F1;">🗓️ {itype}</span>
+                                <span style="font-size: 0.8rem; color: #94A3B8;">{created[:19] if len(created) > 19 else created}</span>
+                            </div>
+                            <p style="font-size: 0.9rem; margin-bottom: 8px;">{transcript_full}</p>
+                            {f'<div style="font-size: 0.85rem; color: #10B981; background: rgba(16, 185, 129, 0.06); padding: 8px 12px; border-radius: 8px;"><b>AI Summary:</b> {summary_full}</div>' if summary_full else ''}
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
-                    st.write("No recorded interactions found for this lead in PostgreSQL.")
-            else:
-                st.write("Unable to fetch interaction history.")
-        except Exception as e:
-            st.write(f"Error loading history: {e}")
+                    st.info("No recorded interactions found for this prospect yet.")
+        except Exception:
+            pass
+
 
 if __name__ == "__main__":
     show()

@@ -37,7 +37,7 @@ class Lead(Base):
     # Lead Metrics & Status
     lead_score = Column(Integer, default=0)
     priority = Column(String(20), default="Medium")
-    status = Column(String(30), default="New")
+    status = Column(String(100), default="New")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
