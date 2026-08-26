@@ -43,7 +43,7 @@ def show():
         return st.session_state.get("user_id", 1)
 
     user_id = get_current_user_id()
-    st.markdown("<h1 style='font-weight: 800; letter-spacing: -0.02em;'>🎯 Module 4: Lead Scoring & Qualification Engine</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='font-weight: 800; letter-spacing: -0.02em;'>🎯Lead Scoring & Qualification Engine</h1>", unsafe_allow_html=True)
     st.caption("AI-assisted multi-factor scoring model prioritizing high-intent accounts and conversion velocity.")
 
     # Retrieve user ID safely
@@ -60,7 +60,7 @@ def show():
         pass
 
     if not leads_data:
-        st.info("💡 No lead records available to score. Please register or import leads in **Module 1 (Lead Pipeline)** first.")
+        st.info("💡 No lead records available to score. Please register or import leads in **(Lead Pipeline)** first.")
         return
 
     # 2. Process Scoring & Tiers

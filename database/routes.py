@@ -38,9 +38,31 @@ GOOGLE_CLIENT_SECRET = os.getenv(
 REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8501/").strip()
 
 
-def clean_json_response(text: str) -> dict:
+def sanitize_status(val: any) -> str:
+    """Ensures status is always a valid CRM stage string and never an integer or index."""
+    if val is None:
+        return "New"
+    val_str = str(val).strip()
+    if val_str in ["", "1", "0", "None", "null", "true", "false"]:
+        return "New"
+
+    mapping = {
+        "new": "New",
+        "contacted": "Contacted",
+        "qualified": "Qualified",
+        "proposal sent": "Proposal Sent",
+        "proposal": "Proposal Sent",
+        "closed won": "Closed Won",
+        "won": "Closed Won",
+        "closed lost": "Closed Lost",
+        "lost": "Closed Lost"
+    }
+    return mapping.get(val_str.lower(), val_str[:50])
+
+
+def clean_json_response(text_data: str) -> dict:
     """Utility to clean Markdown code block formatting from Gemini responses."""
-    cleaned = re.sub(r"```json\s*", "", text)
+    cleaned = re.sub(r"```json\s*", "", text_data)
     cleaned = re.sub(r"```\s*$", "", cleaned).strip()
     try:
         return json.loads(cleaned)
@@ -201,7 +223,7 @@ def login(data: dict, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.email == email).first()
     if not user:
-        user_name = email.split("@")[0].title()
+        user_name = email.split("@")[0].title() if email else "Sales Rep"
         user = User(email=email, name=user_name, password=password if password else "password123")
         db.add(user)
         db.commit()
@@ -244,28 +266,49 @@ def signup(data: dict, db: Session = Depends(get_db)):
 
 
 # =====================================================================
-# 2. LEAD MANAGEMENT ENDPOINTS
+# 2. LEAD MANAGEMENT ENDPOINTS (SELF-HEALING & SANITIZED)
+# =====================================================================
+# =====================================================================
+# 2. LEAD MANAGEMENT ENDPOINTS (ORDERED CHRONOLOGICALLY / AT LAST)
 # =====================================================================
 @router.get("/leads")
 def get_leads(user_id: int = Query(1), db: Session = Depends(get_db)):
-    leads = db.query(Lead).filter(Lead.user_id == user_id).order_by(Lead.id.desc()).all()
+    # .order_by(Lead.id.asc()) appends newest leads at the bottom/last
+    leads = db.query(Lead).filter(Lead.user_id == user_id).order_by(Lead.id.asc()).all()
     result = []
+    dirty = False
+
     for lead in leads:
+        raw_status = getattr(lead, "status", None) or getattr(lead, "lead_status", "New")
+        clean_status = sanitize_status(raw_status)
+
+        # Auto-heal any legacy records stored with status '1' or empty
+        if str(raw_status).strip() in ["", "1", "0", "None", "null"]:
+            lead.status = "New"
+            dirty = True
+
         result.append(
             {
                 "id": lead.id,
                 "name": getattr(lead, "name", None) or getattr(lead, "contact_name", "N/A"),
                 "company": getattr(lead, "company", None) or getattr(lead, "company_name", "N/A"),
                 "email": lead.email,
-                "phone": lead.phone,
-                "industry": lead.industry,
-                "company_size": lead.company_size,
-                "revenue": str(lead.revenue),
-                "priority": lead.priority,
-                "status": getattr(lead, "status", None) or getattr(lead, "lead_status", "New"),
+                "phone": lead.phone or "N/A",
+                "industry": lead.industry or "General",
+                "company_size": lead.company_size or "1-10",
+                "revenue": str(lead.revenue or "0"),
+                "priority": lead.priority or "Medium",
+                "status": clean_status,
                 "created_at": lead.created_at.isoformat() if lead.created_at else None,
             }
         )
+
+    if dirty:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+
     return result
 
 
@@ -278,6 +321,8 @@ def create_lead(data: dict, user_id: int = Query(1), db: Session = Depends(get_d
     if not name or not company or not email:
         raise HTTPException(status_code=400, detail="Name, Company, and Email are required.")
 
+    status_val = sanitize_status(data.get("status"))
+
     new_lead = Lead(
         user_id=user_id,
         name=name,
@@ -286,9 +331,9 @@ def create_lead(data: dict, user_id: int = Query(1), db: Session = Depends(get_d
         phone=data.get("phone", ""),
         industry=data.get("industry", "General"),
         company_size=data.get("company_size", "1-10"),
-        revenue=data.get("revenue", "0"),
+        revenue=str(data.get("revenue", "0")),
         priority=data.get("priority", "Medium"),
-        status=(data.get("status") or "New")[:50],
+        status=status_val,
     )
     db.add(new_lead)
     db.commit()
@@ -303,11 +348,23 @@ def update_lead(lead_id: int, data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Lead #{lead_id} not found.")
 
     try:
-        for field in ["name", "company", "email", "phone", "industry", "priority"]:
+        # Include all fields: name, company, email, phone, industry, company_size, revenue, priority
+        editable_fields = [
+            "name",
+            "company",
+            "email",
+            "phone",
+            "industry",
+            "company_size",
+            "revenue",
+            "priority",
+        ]
+        for field in editable_fields:
             if field in data and data[field] is not None:
-                setattr(lead, field, data[field])
-        if "status" in data and data["status"]:
-            lead.status = str(data["status"])[:50]
+                setattr(lead, field, str(data[field]))
+
+        if "status" in data and data["status"] is not None:
+            lead.status = sanitize_status(data["status"])
 
         db.commit()
         db.refresh(lead)
@@ -315,7 +372,6 @@ def update_lead(lead_id: int, data: dict, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update lead: {str(e)}")
-
 
 @router.delete("/leads/{lead_id}")
 def delete_lead(lead_id: int, db: Session = Depends(get_db)):
@@ -352,7 +408,7 @@ def create_leads_bulk(leads: List[dict], user_id: int = Query(1), db: Session = 
                 company_size=str(lead.get("company_size") or "1-10"),
                 revenue=str(lead.get("revenue") or "0"),
                 priority=str(lead.get("priority") or "Medium"),
-                status=str(lead.get("status") or "New")[:50],
+                status=sanitize_status(lead.get("status")),
             )
             db.add(db_lead)
             created_count += 1
@@ -471,11 +527,8 @@ Return ONLY valid JSON in this exact structure:
             "recommended_stage": "Qualified",
         }
 
-    VALID_STAGES = ["New", "Contacted", "Qualified", "Proposal Sent", "Closed Won", "Closed Lost"]
     raw_stage = str(ai_data.get("recommended_stage", "")).strip()
-    if raw_stage:
-        matched_stage = next((s for s in VALID_STAGES if s.lower() in raw_stage.lower()), None)
-        lead.status = matched_stage if matched_stage else raw_stage[:50]
+    lead.status = sanitize_status(raw_stage)
 
     try:
         new_conv = Conversation(
