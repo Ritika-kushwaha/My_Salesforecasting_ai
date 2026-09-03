@@ -25,15 +25,10 @@ router = APIRouter()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
-GOOGLE_CLIENT_ID = os.getenv(
-    "GOOGLE_CLIENT_ID",
-    "802596462436-vtfnim58h3j7mo706b4bs8dko80cdmb1.apps.googleusercontent.com"
-).strip()
 
-GOOGLE_CLIENT_SECRET = os.getenv(
-    "GOOGLE_CLIENT_SECRET",
-    "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"
-).strip()
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8501/").strip()
 
 REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8501/").strip()
 
