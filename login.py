@@ -14,15 +14,8 @@ except ImportError:
 
 API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
-CLIENT_ID = os.getenv(
-    "GOOGLE_CLIENT_ID",
-    "802596462436-vtfnim58h3j7mo706b4bs8dko80cdmb1.apps.googleusercontent.com"
-).strip()
-
-CLIENT_SECRET = os.getenv(
-    "GOOGLE_CLIENT_SECRET",
-    "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"
-).strip()
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
 
 REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8501/").strip()
 
