@@ -6,7 +6,6 @@ import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from google import genai
 from pydantic import BaseModel
 import requests
 from sqlalchemy import func, text
@@ -23,7 +22,14 @@ router = APIRouter()
 # ENVIRONMENT & CONFIGURATION
 # -------------------------------------------------------------------
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+# Lazy-load genai to avoid import-time crash if package not available
+try:
+    from google import genai as _genai
+    client = _genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+except Exception as _e:
+    logger.warning(f"google-genai not available: {_e}")
+    client = None
 
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
