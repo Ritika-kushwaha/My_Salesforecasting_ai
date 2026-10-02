@@ -1,11 +1,14 @@
 import requests
 import os
-import google.generativeai as genai
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+try:
+    from google import genai as _genai
+    _api_key = os.getenv("GEMINI_API_KEY", "")
+    _client = _genai.Client(api_key=_api_key) if _api_key else None
+except Exception:
+    _client = None
 
-model = genai.GenerativeModel("gemini-2.5-flash")
-API_URL = "http://127.0.0.1:8000"
+API_URL = os.getenv("SALESGENIE_API_URL", "http://127.0.0.1:8000")
 
 def add_lead(data):
     return requests.post(f"{API_URL}/leads", json=data)
