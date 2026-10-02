@@ -12,7 +12,10 @@ if not DATABASE_URL:
         "DATABASE_URL environment variable is not set. "
         "Please configure it in your Render environment variables."
     )
-
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 # pool_pre_ping=True: automatically reconnects dropped connections
 engine = create_engine(
     DATABASE_URL,
