@@ -1,0 +1,45 @@
+services:
+  # ── Streamlit Frontend ──────────────────────────────────────────
+  - type: web
+    name: salesgenie-app
+    runtime: python
+    repo: https://github.com/Ritika-kushwaha/My_Salesforecasting_ai
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run main.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false           # Set this manually in Render dashboard
+      - key: GOOGLE_CLIENT_ID
+        sync: false           # Set this manually in Render dashboard
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false           # Set this manually in Render dashboard
+      - key: REDIRECT_URI
+        sync: false           # Set to your Render app URL e.g. https://salesgenie-app.onrender.com/
+      - key: DATABASE_URL
+        fromDatabase:
+          name: salesgenie-db
+          property: connectionString
+      - key: SALESGENIE_API_URL
+        value: http://localhost:8000
+
+  # ── FastAPI Backend ─────────────────────────────────────────────
+  - type: web
+    name: salesgenie-api
+    runtime: python
+    repo: https://github.com/Ritika-kushwaha/My_Salesforecasting_ai
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn database.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: salesgenie-db
+          property: connectionString
+
+# ── PostgreSQL Database ─────────────────────────────────────────
+databases:
+  - name: salesgenie-db
+    databaseName: salesgenie
+    user: salesgenie
+    plan: free

@@ -1,0 +1,26 @@
+name: Mirror Private → Public Repo
+
+on:
+  push:
+    branches:
+      - main
+      - frontend
+      - Testing-Branch
+      - "feature/**"
+      - "agents/**"
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Public Mirror (My_Salesforecasting_ai)
+        run: |
+          git remote add public https://x-access-token:${{ secrets.PUBLIC_REPO_PAT }}@github.com/Ritika-kushwaha/My_Salesforecasting_ai.git
+          git push public --mirror
+        env:
+          GIT_TERMINAL_PROMPT: 0
