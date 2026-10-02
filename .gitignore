@@ -4,3 +4,24 @@ dist/
 build/
 *.log
 .vscode/
+.env
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python cache & build files
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
