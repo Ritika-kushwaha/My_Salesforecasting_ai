@@ -189,7 +189,7 @@ def show():
     # 1. Fetch leads (loaded chronologically: newest at the bottom)
     leads_data = []
     try:
-        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=8)
+        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=30)
         if res.status_code == 200:
             raw_leads = res.json()
             for item in raw_leads:
@@ -298,7 +298,7 @@ def show():
                 with q_cols[idx]:
                     if st.button(f"➔ {s_name}", key=f"lead_dock_{s_name}_{lead_db_id}", use_container_width=True):
                         try:
-                            requests.put(f"{API_URL}/leads/{lead_db_id}", json={"status": s_name}, timeout=6)
+                            requests.put(f"{API_URL}/leads/{lead_db_id}", json={"status": s_name}, timeout=30)
                             st.toast(f"Status updated to '{s_name}'!", icon="✅")
                             st.rerun()
                         except Exception as ex:
@@ -367,7 +367,7 @@ def show():
                                 "status": u_status,
                             }
                             try:
-                                requests.put(f"{API_URL}/leads/{lead_db_id}", json=payload, timeout=6)
+                                requests.put(f"{API_URL}/leads/{lead_db_id}", json=payload, timeout=30)
                                 st.toast("All lead details updated successfully!", icon="🎉")
                                 st.rerun()
                             except Exception as ex:
@@ -385,7 +385,7 @@ def show():
                 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
                 if st.button("🗑️ Delete Lead Record", key=f"d_btn_{lead_db_id}", type="secondary", use_container_width=True):
                     try:
-                        requests.delete(f"{API_URL}/leads/{lead_db_id}", timeout=6)
+                        requests.delete(f"{API_URL}/leads/{lead_db_id}", timeout=30)
                         st.toast("Lead deleted.", icon="🗑️")
                         st.rerun()
                     except Exception as ex:
@@ -421,7 +421,7 @@ def show():
                         "priority": n_prio,
                         "status": "New"
                     }
-                    requests.post(f"{API_URL}/leads", params={"user_id": user_id}, json=payload, timeout=6)
+                    requests.post(f"{API_URL}/leads", params={"user_id": user_id}, json=payload, timeout=30)
                     st.toast(f"Lead '{n_name}' added at the end of pipeline!", icon="🚀")
                     st.rerun()
 

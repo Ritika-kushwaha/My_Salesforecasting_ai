@@ -53,7 +53,7 @@ def show():
     # 1. Fetch leads
     leads_data = []
     try:
-        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=10)
+        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=30)
         if res.status_code == 200:
             leads_data = res.json()
     except Exception:

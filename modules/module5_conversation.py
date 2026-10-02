@@ -59,7 +59,7 @@ def show():
 
     leads_list = []
     try:
-        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=8)
+        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=30)
         if res.status_code == 200:
             leads_list = res.json()
     except Exception:
@@ -153,7 +153,7 @@ def show():
                         st.rerun()
 
         try:
-            hist_res = requests.get(f"{API_URL}/conversations", params={"lead_id": selected_lead_id, "user_id": user_id}, timeout=8)
+            hist_res = requests.get(f"{API_URL}/conversations", params={"lead_id": selected_lead_id, "user_id": user_id}, timeout=30)
             if hist_res.status_code == 200:
                 history_data = hist_res.json()
                 if history_data:

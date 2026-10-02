@@ -135,13 +135,13 @@ def show():
 
     # 2. Fetch Dashboard Metrics & Leads
     try:
-        res = requests.get(f"{API_URL}/dashboard", params={"user_id": user_id}, timeout=8)
+        res = requests.get(f"{API_URL}/dashboard", params={"user_id": user_id}, timeout=30)
         dash_data = res.json() if res.status_code == 200 else {}
     except Exception:
         dash_data = {}
 
     try:
-        leads_res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=8)
+        leads_res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=30)
         leads_data = leads_res.json() if leads_res.status_code == 200 else []
     except Exception:
         leads_data = []
@@ -223,7 +223,7 @@ def show():
                 with q_cols[idx]:
                     if st.button(f"➔ {s_name}", key=f"dash_stage_{s_name}_{target_id}", use_container_width=True):
                         try:
-                            requests.put(f"{API_URL}/leads/{target_id}", json={"status": s_name}, timeout=6)
+                            requests.put(f"{API_URL}/leads/{target_id}", json={"status": s_name}, timeout=30)
                             st.toast(f"Updated {target_lead.get('name')} to '{s_name}'!", icon="✅")
                             st.rerun()
                         except Exception as ex:

@@ -59,7 +59,7 @@ def show():
 
     leads_list = []
     try:
-        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=8)
+        res = requests.get(f"{API_URL}/leads", params={"user_id": user_id}, timeout=30)
         if res.status_code == 200:
             leads_list = res.json()
     except Exception:
@@ -141,7 +141,7 @@ def show():
                 lead_id = result.get("lead_id")
                 if lead_id:
                     if st.button("🚀 Mark Lead as 'Contacted'", type="secondary", use_container_width=True):
-                        requests.put(f"{API_URL}/leads/{lead_id}", json={"status": "Contacted"}, timeout=6)
+                        requests.put(f"{API_URL}/leads/{lead_id}", json={"status": "Contacted"}, timeout=30)
                         st.toast(f"{result.get('name')} marked as Contacted!", icon="✅")
                 else:
                     st.button("📋 Ready to Send", use_container_width=True, disabled=True)
